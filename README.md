@@ -18,3 +18,14 @@ Design and planning phase (no production system implemented)
 The current workflow relies on phone calls, paper forms, and manual re-entry of data into billing software. The most significant challenge is assembling completed rides by patient and facility for billing, which causes delays and unnecessary operational strain.
 
 This repository will be updated weekly to document design decisions, architecture artifacts, and planning materials.
+
+## Product Development Lifecycle Alignment
+
+This project follows a structured Product Development Lifecycle (PDLC) approach:
+
+- Discovery & Ideation: problem framing and stakeholder analysis
+- Requirements & Planning: functional and nonfunctional requirements
+- Design: human-centered design, system architecture, and data modeling
+- Development, Testing, Deployment: planned for post-graduation implementation
+- Maintenance & Iteration: documented through reflection and future roadmap
+
