@@ -125,18 +125,44 @@ Driver documentation fields (captured during execution):
 
 ---
 
-## Entity 7 (Optional Later): BillingRecord
+## Entity 7 (Optional Later): ## Billing / Claims Tracking Module (Proposed)
 
-**Definition:** A billing workflow record to track invoicing state over time.
+This system does not replace QuickBooks. QuickBooks remains the source of truth for payment and accounting.
 
-**Why it exists:** Billing needs “checkbox” status and grouping support (ready to bill / billed / paid). This can be added later if needed.
+This module tracks billing workflow for patient-month billing packets:
+- what was sent
+- when it was sent or resent
+- optional follow-up notes for delinquent facilities
+- optional close-out once confirmed in QuickBooks
+
+### Entity: PatientInvoicePacket (Billing Packet)
+
+**Definition:** A patient-month billing packet sent to a facility (or broker/patient in special cases). This is a workflow object, not an accounting ledger.
+
+**Why it exists:** The business bills monthly by patient. Tracking packet status prevents rework and supports identifying overdue facilities without duplicating QuickBooks.
 
 **Likely core attributes**
-- billing_record_id
+- packet_id
 - facility_id (FK)
-- billing_period_start
-- billing_period_end
-- status (draft / submitted / paid)
+- patient_id (FK)
+- billing_month (YYYY-MM)
+- billing_recipient_type (facility / broker / patient)
+- packet_status (ready_to_send / sent / needs_resend / confirmed_received / closed_in_qb)
+- last_sent_date (optional)
+- qb_reference (optional; for cross-reference only)
+- notes (optional)
 
-Notes:
-- This may be implemented as a status field on TripLeg instead of a separate table, depending on design decisions later.
+### Entity: PacketActivityLog (Optional but valuable)
+
+**Definition:** A log of key events for billing packets (send, resend, follow-up calls/emails, escalations).
+
+**Why it exists:** Some facilities fall behind, and documenting contacts/outcomes can support consistent follow-up and escalation without requiring heavy data entry for every packet.
+
+**Likely core attributes**
+- activity_id
+- packet_id (FK)
+- activity_type (sent / resent / follow_up_call / follow_up_email / escalation / received_confirmation)
+- activity_date
+- contact_person (optional)
+- summary (optional)
+- next_action_date (optional)
