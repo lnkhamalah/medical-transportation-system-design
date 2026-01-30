@@ -25,5 +25,17 @@ This system must support non-technical users in a fast-paced environment. The de
   - Validate required fields before submission.
   - Basic logic checks (e.g., pickup time should not occur after end time for a completed leg).
 
+## Design Constraints Derived from Cognitive Load
+
+The human-centered considerations in this project are not abstract preferences; they function as hard constraints on system design.
+
+- Users cannot be expected to remember information across screens, so the system must display relevant ride details at the moment of action.
+- Drivers must be able to confirm and document a trip without navigating away from the assigned ride view.
+- Repeated data entry must be minimized by reusing patient and facility records rather than retyping.
+- Required fields and validation rules must prevent incomplete or inconsistent submissions, as errors propagate directly into billing disputes.
+
+These constraints directly influence database structure, form validation rules, and role-based views in later design phases.
+
 ## Why This Matters
 Reducing cognitive load increases accuracy, reduces rework, and supports trust with facilities by maintaining consistent documentation.
+
