@@ -14,7 +14,7 @@ No database structure decisions are made here.
 | Field Name | Field Type | Required | Notes |
 |-----------|-----------|----------|------|
 | Facility Name | text | yes | Reused across many trips |
-| Contact Name | text | yes | Facility point of contact |
+| Contact Name | text | yes | Facility point of contact, “If unknown, enter ‘UNKNOWN’.”  |
 | Phone Number | text | yes | Validate as 10 digits (ignore punctuation) |
 | Phone Extension | text | no | Optional; stored separately from phone |
 | Fax Number | text | no | Legacy support |
@@ -35,8 +35,9 @@ No database structure decisions are made here.
 | Wheelchair Type | enum | yes | Regular, Wide, Extra Wide, Ambulatory |
 | Pickup Address | text | yes | Full address |
 | Drop-off Address | text | yes | Full address |
+| Escort Present | boolean | no | If yes and name unknown, Escort Identifier may be 'UNKNOWN' |
 | Escort Name / Identifier | text | no | Name if known; may be 'UNKNOWN' |
-| Request Signature | text | yes | Authorization indicator |
+| Request Signature | text | yes | Authorization indicator; typed name, checkbox acknowledgment, captured signature image later |
 
 ---
 
@@ -48,7 +49,7 @@ No database structure decisions are made here.
 | Middle Initial | text | no | Optional |
 | Last Name | text | yes | |
 | Gender | enum | yes | Male / Female |
-| Payment Method | enum | yes | Private, Check, Cash |
+| Payment Method | enum | yes | Private, Check, Cash. Facility billing handled as monthly invoicing. |
 
 ---
 
@@ -56,8 +57,9 @@ No database structure decisions are made here.
 
 | Field Name | Field Type | Required | Notes |
 |-----------|-----------|----------|------|
-| Billing Authorization Signature | text | yes | Required for direct billing |
-| Authorization Date | date | yes | |
+| Billing Authorization Signature | text | conditional | Required only when direct billing applies |
+| Authorization Date | date | conditional | Required only when direct billing applies |
+
 
 ---
 
