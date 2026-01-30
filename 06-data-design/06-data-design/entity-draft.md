@@ -19,8 +19,6 @@ The primary design constraint is that the digital form must remain familiar in o
 - facility_fax (optional)
 
 
----
-
 ## Entity 2: FacilityContact
 
 **Definition:** A contact point at a facility (a person, role, or department) used for scheduling or trip coordination.
@@ -86,6 +84,8 @@ Notes:
 - payment_method (private / check / cash)
 - direct_billing_signature (optional based on billing type)
 - direct_billing_date (optional based on billing type)
+Notes:
+- Mobility needs (wheelchair_type) are stored on TripRequest because they do not differ by leg in normal operations.
 
 ---
 
