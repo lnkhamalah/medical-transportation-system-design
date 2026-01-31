@@ -1,168 +1,221 @@
-# Entity Draft (Proposed)
+# Entity Draft
 
-This document identifies the core entities required to support the current paper form workflow while enabling structured, queryable data. These entities are not final tables yet; they represent the real-world objects the system must track.
+This document defines the proposed data entities for the Non-Emergency Medical Transportation System. It supports:
+- a familiar paper-like intake form
+- structured querying for scheduling and billing preparation
+- audit protection (what was entered for a specific trip stays accurate over time)
+- autosuggest to reduce duplicate names and phone entry errors
 
-The primary design constraint is that the digital form must remain familiar in order and language, while the back end supports reuse (patients/facilities) and leg-level documentation (outbound and return trips).
-
----
+This is a design artifact only (no implementation required for IT599).
 
 ## Entity 1: Facility
 
-**Definition:** An organization (clinic, hospital, care home) that requests rides and receives invoices.
+### Definition
+A healthcare facility that schedules rides and receives invoices.
 
-**Why it exists:** Facilities are repeated across trips and are used for billing grouping and contact reference.
+### Why it exists
+Trips are frequently associated with recurring facilities. Facilities are used to group rides for scheduling and monthly billing.
 
-**Likely core attributes**
-- facility_id
-- facility_name
-- facility_main_phone
-- facility_fax (optional)
+### Attributes
+- facility_id (PK) - unique identifier
+- facility_name (required) - text
+- facility_main_phone (optional) - text (validated as 10 digits)
+- facility_fax (optional) - text (validated as 10 digits)
+- is_active (required) - boolean (default true)
+- created_at (required) - datetime
+- updated_at (required) - datetime
 
+### Notes
+- Facility name should be unique enough for autosuggest; duplicates should be prevented if possible.
+- Fax is retained because the paper form includes it, but may be rarely used.
 
 ## Entity 2: FacilityContact
 
-**Definition:** A contact point at a facility (a person, role, or department) used for scheduling or trip coordination.
+### Definition
+A reusable point of contact at a facility (scheduler, nurse station, supervisor, after-hours line, billing office, etc.).
 
-**Why it exists:** Facilities may have multiple contacts and different phone numbers (scheduler vs nurse vs after-hours). These may change over time.
+### Why it exists
+Autosuggest reduces duplicate typing and errors (for example, name variations). Facilities can have multiple contacts with different roles and numbers.
 
-**Likely core attributes**
-- contact_id
-- facility_id (FK)
-- contact_name (person name or role label, e.g., "Scheduling", "Nurse Station")
-- phone_number
-- phone_extension (optional)
-- contact_type (optional: scheduling / nursing / after_hours / billing)
+### Attributes
+- contact_id (PK) - unique identifier
+- facility_id (FK -> Facility.facility_id, required)
+- contact_name (required) - text
+  - rule: if unknown at intake, enter UNKNOWN
+- contact_role (optional) - text or enum (scheduler, nurse, supervisor, after_hours, billing, other)
+- contact_phone (required) - text (validated as 10 digits; punctuation ignored)
+- contact_ext (optional) - text (extension may be blank)
+- is_primary (optional) - boolean (default false)
+- is_active (required) - boolean (default true)
+- created_at (required) - datetime
+- updated_at (required) - datetime
 
-
-Notes:
-- Phone number is stored as text and validated (e.g., 10 digits ignoring punctuation).
-- Extension is stored separately and optional.
-
----
+### Notes
+- Inactive means the contact should not appear as the default, but can still be selected for historical reference.
+- Autosuggest should support close matches (fuzzy match) to reduce misspellings and duplicate records.
 
 ## Entity 3: Patient
 
-**Definition:** A person being transported.
+### Definition
+A person receiving transportation services.
 
-**Why it exists:** Patients are frequently repeated, and reuse prevents retyping and reduces errors.
+### Why it exists
+Patients are repeat riders and rides must be searchable by patient over time and by facility.
 
-**Likely core attributes**
-- patient_id
-- first_name
-- middle_initial (optional)
-- last_name
-- gender
-Notes:
-- Mobility needs are captured per trip request for accuracy.
-- A patient may optionally store a "default mobility" value as a convenience, but the trip value is authoritative.
+### Attributes
+- patient_id (PK) - unique identifier
+- first_name (required) - text
+- middle_initial (optional) - text
+- last_name (required) - text
+- gender (required) - enum (male, female)
+- is_active (required) - boolean (default true)
+- created_at (required) - datetime
+- updated_at (required) - datetime
 
----
+### Notes
+- Autosuggest should reduce duplicates (for example, minor spelling variations).
+- Patient identity matching may require additional fields later (DOB, phone, etc.), but those are out of scope unless the business already collects them.
 
 ## Entity 4: TripRequest
 
-**Definition:** The ride request created from the paper form. A single request may produce one leg (one-way) or two legs (round trip).
+### Definition
+A ride request created from the intake form (the order).
 
-**Why it exists:** It stores the request context and connects facility, patient, and trip details.
+### Why it exists
+This is the main record that connects facility, patient, scheduling details, and the paper-like form output (PDF).
 
-**Likely core attributes**
-- trip_request_id
-- facility_id (FK)
-- contact_id (FK, optional depending on workflow)
-- patient_id (FK)
-- order_date
-- service_date
-- pickup_time
-- appointment_time
-- back_time (optional)
-- will_call (optional)
-- trip_type (one-way or round trip)
-- wheelchair_type (regular / wide / extra wide / ambulatory)
-- pickup_address
-- dropoff_address
-- escort_identifier (optional; may be 'UNKNOWN')
-- request_signature
-- payment_method (private / check / cash)
-- direct_billing_signature (optional based on billing type)
-- direct_billing_date (optional based on billing type)
-Notes:
-- Mobility needs (wheelchair_type) are stored on TripRequest because they do not differ by leg in normal operations.
+### Attributes
+- trip_request_id (PK) - unique identifier
 
----
+### Links
+- facility_id (FK -> Facility.facility_id, required)
+- contact_id (FK -> FacilityContact.contact_id, optional)
+  - optional means: a trip can still be created even if the dispatcher did not select a saved contact
+- patient_id (FK -> Patient.patient_id, required)
+
+### Contact snapshot for this specific request (audit truth)
+These fields are required even if contact_id is present.
+- contact_name_used (required) - text
+- contact_phone_used (required) - text (validated as 10 digits)
+- contact_ext_used (optional) - text
+- contact_fax_used (optional) - text
+
+### Trip information (from form)
+- order_date (required) - date
+- service_date (required) - date
+- pickup_time (required) - time
+- appointment_time (required) - time
+- back_time (optional) - time
+- will_call (optional) - boolean
+- trip_type (required) - enum (one_way, round_trip)
+- wheelchair_type (required) - enum (regular, wide, extra_wide, ambulatory)
+- pickup_address (required) - text
+- dropoff_address (required) - text
+- escort_present (optional) - boolean
+- escort_identifier (optional) - text (name if known; may be UNKNOWN)
+- request_signature (required) - text
+
+### Billing authorization (conditional)
+- direct_billing_applies (optional) - boolean
+- billing_authorization_signature (conditional) - text
+- authorization_date (conditional) - date
+
+### System fields
+- status (required) - enum (draft, scheduled, completed, cancelled)
+- created_at (required) - datetime
+- updated_at (required) - datetime
+
+### Notes
+- Conditional means: required only when direct_billing_applies is true.
+- Appointment time is required because it affects scheduling performance and dispute protection.
 
 ## Entity 5: TripLeg
 
-**Definition:** A single leg of travel that must be documented by the driver. A round trip produces two legs (outbound and return). Legs may occur hours apart and may be cancelled independently.
+### Definition
+One completed transport leg, documented by the driver (official use only section). A round trip results in two legs that may occur hours apart.
 
-**Why it exists:** The official-use-only section on the form is leg-level, not request-level.
+### Why it exists
+Disputes and billing accuracy require leg-level timestamps, odometer values, and confirmation.
 
-**Likely core attributes**
-- trip_leg_id
-- trip_request_id (FK)
-- leg_type (outbound / return)
-- scheduled_pickup_time (optional if will-call)
-- driver_id (FK, assigned by dispatcher)
-- leg_status (scheduled / completed / cancelled / no-show)
+### Attributes
+- trip_leg_id (PK) - unique identifier
+- trip_request_id (FK -> TripRequest.trip_request_id, required)
+- driver_id (FK -> Driver.driver_id, optional until assigned)
 
-Driver documentation fields (captured during execution):
-- odometer_start
-- start_time
-- odometer_end
-- end_time
-- total_mileage
-- driver_signature
+### Leg identification
+- leg_type (required) - enum (outbound, return)
+- leg_sequence (optional) - integer (1 or 2)
+- scheduled_pickup_time (optional) - time (for dispatcher view; can be derived)
+- completed_flag (required) - boolean (default false)
 
----
+### Driver completion fields (required when completed_flag = true)
+- driver_signature (conditional) - text
+- odometer_start (conditional) - number
+- start_time (conditional) - time
+- odometer_end (conditional) - number
+- end_time (conditional) - time
+- total_mileage (conditional) - number (calculated)
+
+### Billing workflow (minimal, to avoid duplicating QuickBooks)
+- invoiced_flag (required) - boolean (default false)
+- invoiced_month (optional) - YYYY-MM (derived from service_date month)
+- invoiced_date (optional) - date
+- paid_flag (required) - boolean (default false)
+- paid_date (optional) - date
+
+### System fields
+- created_at (required) - datetime
+- updated_at (required) - datetime
+
+### Notes
+- If trip_type = one_way, create 1 TripLeg (outbound).
+- If trip_type = round_trip, create 2 TripLegs (outbound and return).
+- Conditional means: required only when completed_flag = true.
+- Billing flags support visibility without duplicating QuickBooks logic.
 
 ## Entity 6: Driver
 
-**Definition:** A driver who completes trips and provides documentation.
+### Definition
+A driver who completes trip legs.
 
-**Why it exists:** Drivers are reused across days and are required for scheduling visibility and accountability.
+### Why it exists
+Drivers need ride lists and documentation; the business needs accountability for completion and disputes.
 
-**Likely core attributes**
-- driver_id
-- driver_name
+### Attributes
+- driver_id (PK) - unique identifier
+- driver_name (required) - text
+- phone_number (optional) - text
+- is_active (required) - boolean (default true)
+- created_at (required) - datetime
+- updated_at (required) - datetime
 
----
+## Relationships (ERD-style notation)
 
-## Entity 7 (Optional Later): ## Billing / Claims Tracking Module (Proposed)
+- Facility (1) -> (0..*) FacilityContact
+  - One facility can have many contacts; each contact belongs to one facility.
 
-This system does not replace QuickBooks. QuickBooks remains the source of truth for payment and accounting.
+- Facility (1) -> (0..*) TripRequest
+  - One facility can schedule many trip requests; each request is associated with one facility.
 
-This module tracks billing workflow for patient-month billing packets:
-- what was sent
-- when it was sent or resent
-- optional follow-up notes for delinquent facilities
-- optional close-out once confirmed in QuickBooks
+- Patient (1) -> (0..*) TripRequest
+  - One patient can have many trip requests; each request belongs to one patient.
 
-### Entity: PatientInvoicePacket (Billing Packet)
+- TripRequest (1) -> (1..2) TripLeg
+  - Each request produces one leg (one-way) or two legs (round-trip).
 
-**Definition:** A patient-month billing packet sent to a facility (or broker/patient in special cases). This is a workflow object, not an accounting ledger.
+- Driver (1) -> (0..*) TripLeg
+  - One driver can complete many legs; each leg is completed by at most one driver.
 
-**Why it exists:** The business bills monthly by patient. Tracking packet status prevents rework and supports identifying overdue facilities without duplicating QuickBooks.
+- FacilityContact (1) -> (0..*) TripRequest (optional linkage)
+  - A request may reference a saved contact, but still stores snapshot fields as audit truth.
 
-**Likely core attributes**
-- packet_id
-- facility_id (FK)
-- patient_id (FK)
-- billing_month (YYYY-MM)
-- billing_recipient_type (facility / broker / patient)
-- packet_status (ready_to_send / sent / needs_resend / confirmed_received / closed_in_qb)
-- last_sent_date (optional)
-- qb_reference (optional; for cross-reference only)
-- notes (optional)
+## Intake behavior rules (autosuggest and different contact today)
 
-### Entity: PacketActivityLog (Optional but valuable)
-
-**Definition:** A log of key events for billing packets (send, resend, follow-up calls/emails, escalations).
-
-**Why it exists:** Some facilities fall behind, and documenting contacts/outcomes can support consistent follow-up and escalation without requiring heavy data entry for every packet.
-
-**Likely core attributes**
-- activity_id
-- packet_id (FK)
-- activity_type (sent / resent / follow_up_call / follow_up_email / escalation / received_confirmation)
-- activity_date
-- contact_person (optional)
-- summary (optional)
-- next_action_date (optional)
+1. The user selects a facility (autosuggest).
+2. The user enters a contact name (autosuggest plus close matches).
+3. If a saved contact is selected, phone/ext auto-fill.
+4. If the dispatcher edits contact info, default behavior is for this trip only (TripRequest snapshot updates).
+5. The user may explicitly choose:
+   - add as new FacilityContact
+   - update existing FacilityContact
+6. TripRequest snapshot fields remain the historical source of truth for accuracy.
