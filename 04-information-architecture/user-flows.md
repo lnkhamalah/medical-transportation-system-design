@@ -137,3 +137,8 @@ Output:
 - Accountability is role-specific.
 - Round trips are modeled as separate legs.
 - The system supports real-world exceptions (cancellations, delays).
+
+##Design decisions deferred
+- Final database schema
+- Billing workflow depth
+- Contact lifecycle edge cases
