@@ -23,7 +23,7 @@ These requirements describe what the system must do to replace the paper-based w
 - The system must support exporting or generating a billing-friendly output (e.g., PDF summary or report) suitable for manual entry into QuickBooks.
 - System shall support generating patient-month billing packets grouped by facility and billing month.
 - System shall support marking packets as sent/resubmitted/closed in QuickBooks.
-- System should support bulk status updates by facility + month to minimize manual work.
+- System must support bulk status updates by facility + month to minimize manual work.
 
 ## Trip Structure and Special Cases
 - The system must treat a round trip as two independent trip legs.
