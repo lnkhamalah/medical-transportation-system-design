@@ -94,6 +94,8 @@ Custom attributes answer: **what account/context does this user belong to?**
 
 ## Authorization Principles
 
+Authorization decisions must never rely solely on frontend role checks.
+
 ### 1) Least Privilege
 Each role can view/modify only what they need.
 
@@ -187,6 +189,10 @@ Cannot:
 ## Facility Portal Visibility Rules (Formal)
 
 All facility portal access is scoped to:
+
+The facility_id used for scoping must be extracted from the validated JWT token
+after API Gateway authentication and must not be supplied by the client request body.
+Authorization checks are enforced inside Lambda before any database query is executed.
 
 - `TripRequest.facility_id = token.custom:facility_id`
 
