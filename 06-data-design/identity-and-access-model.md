@@ -42,6 +42,7 @@ Rationale:
 - reduces risk of cross-facility data exposure
 - aligns to real workflow (facility is the billing account)
 
+Individual users are treated as facility_type = individual and receive a facility_id just like healthcare facilities.
 ---
 
 ## User Types and Access Modes
