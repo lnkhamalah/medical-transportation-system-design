@@ -5,6 +5,7 @@ This document captures real-world constraints and assumptions that shape the sys
 ## Operational Constraints
 - The business is small (2–3 drivers) and owner-operated, so administrative time is limited.
 - Rides are booked primarily through phone calls from patients and facilities.
+- Approximately 10–20% of rides may originate from individual/private-pay riders without a facility affiliation.
 - Billing is currently delayed due to manual sorting and re-entry into QuickBooks.
 - Round trips are two separate legs and may not occur back-to-back; the return leg may be cancelled (e.g., patient is admitted).
 
@@ -13,13 +14,16 @@ This document captures real-world constraints and assumptions that shape the sys
 - Literacy levels may be moderate; at least one user may have a language barrier.
 - The system must feel like a digital version of the existing paper form (familiarity over novelty).
 - Drivers must be able to document trips quickly without disrupting their workflow.
+- Individual/private-pay riders may require access to view their own trip history for payment tracking.
 
 ## Technical / Project Constraints
 - This capstone is design-and-planning focused; production implementation is out of scope during the course.
 - The system must support secure handling of personal and limited medical-related scheduling information.
-- The design should assume encryption in transit and at rest, and role-based access controls.
+- The design must assume encryption in transit and at rest, and role-based access controls.
+- Every trip must be scoped to a tenant account (healthcare facility or individual). Trip records must not exist without a tenant association.
 
 ## Assumptions
 - Facility and patient records will repeat over time; the system should reduce retyping by reusing stored records.
+- Individual/private-pay riders may also repeat and should be treated as tenant accounts for billing grouping and history tracking.
 - QuickBooks billing will continue to be used initially; outputs must support easier billing preparation even if direct integration is not implemented.
 - The business will require long-term record retention for billing and dispute resolution purposes.
