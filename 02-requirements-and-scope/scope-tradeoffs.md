@@ -9,6 +9,7 @@ This project is a design-and-planning capstone. Scope boundaries are explicitly 
 - Conceptual system architecture (high-level)
 - Data model design (entities, relationships, and form-to-data mapping)
 - Security and ethics considerations (privacy, access roles, retention)
+- Multi-tenant scoping model (facility and individual)
 - Implementation roadmap with risks and tradeoffs
 
 ## Out of Scope (Not Completed During Course)
@@ -21,4 +22,5 @@ This project is a design-and-planning capstone. Scope boundaries are explicitly 
 ## Key Tradeoffs
 - Prioritize a simple, familiar form experience over advanced automation.
 - Prioritize data accuracy and traceability over complex analytics.
+- Model individuals as tenant accounts rather than allowing unscoped or NULL facility records.
 - Document a buildable plan rather than promising a finished deployed product.
