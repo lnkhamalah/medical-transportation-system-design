@@ -8,6 +8,9 @@ These requirements describe what the system must do to replace the paper-based w
 - The system must display a daily schedule view showing rides by date and time.
 - The system must allow assigning a driver to each trip leg.
 - The system must show ride status (scheduled, completed, cancelled, no-show).
+- The system must require selection of requester type: Healthcare Facility or Individual / Private Pay.
+- If Healthcare Facility is selected, the system must require selection or creation of a Facility record.
+- If Individual / Private Pay is selected, the system must automatically create or reuse an Individual-type Facility record linked to the requester.
 
 ## Drivers (Daily Work + Documentation)
 - The system must provide drivers an ordered list of assigned trip legs for a given day.
