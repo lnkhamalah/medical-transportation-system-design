@@ -49,6 +49,7 @@ Reasoning:
 Reasoning:
 - Serverless scaling
 - Centralized enforcement of business rules
+- Lambda enforces role-based authorization and tenant scoping using claims extracted from the validated Cognito JWT. Facility scoping is derived from token claims and never from client-supplied request data.
 - No infrastructure management burden
 - Cost aligned with usage patterns
 
@@ -62,6 +63,11 @@ Reasoning:
 - Strong ACID guarantees
 - Billing grouping and audit queries depend on relational consistency
 - Managed backups and patching
+
+
+RDS is deployed in a private subnet inside a VPC.
+It has no public endpoint and accepts connections only from the Lambda security group.
+Direct client-to-database access is not permitted.
 
 DynamoDB was not selected because:
 - Data model is relational
@@ -110,6 +116,26 @@ Reasoning:
 - Operational debugging
 - Audit visibility
 - Low administrative overhead
+
+
+Trust Boundaries
+
+The system enforces three trust zones:
+
+1. Public Internet (untrusted)
+
+2. Application Layer (controlled compute)
+
+3. Data Layer (restricted persistence)
+
+-Public guest intake is write-only and cannot query existing data.
+
+-Authenticated facility portal access is tenant-scoped using facility_id claims from Cognito tokens.
+
+-Internal users operate with broader permissions but are still enforced through server-side authorization logic.
+
+-All authorization checks occur inside Lambda before database queries are executed.
+
 
 ---
 
