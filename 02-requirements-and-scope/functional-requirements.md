@@ -5,12 +5,13 @@ These requirements describe what the system must do to replace the paper-based w
 ## Dispatcher / Owner (Scheduling + Oversight)
 - The system must allow a dispatcher to create a new ride request using a digital version of the existing paper form.
 - The system must support reuse of existing Facility, Contact, and Patient information for repeat riders to reduce retyping.
+- The system must require selection of requester type: Healthcare Facility or Individual / Private Pay.
+- If Healthcare Facility is selected, the system must require selection or creation of a Facility record.
+- If Individual / Private Pay is selected, the system must automatically create or reuse an Individual-type tenant record.
+- The system must ensure that every TripRequest is linked to a tenant record (facility or individual); NULL tenant references are not permitted.
 - The system must display a daily schedule view showing rides by date and time.
 - The system must allow assigning a driver to each trip leg.
 - The system must show ride status (scheduled, completed, cancelled, no-show).
-- The system must require selection of requester type: Healthcare Facility or Individual / Private Pay.
-- If Healthcare Facility is selected, the system must require selection or creation of a Facility record.
-- If Individual / Private Pay is selected, the system must automatically create or reuse an Individual-type Facility record linked to the requester.
 
 ## Drivers (Daily Work + Documentation)
 - The system must provide drivers an ordered list of assigned trip legs for a given day.
@@ -21,12 +22,12 @@ These requirements describe what the system must do to replace the paper-based w
   - driver signature / confirmation
 
 ## Billing (Grouping + Tracking)
-- The system must support grouping completed rides by facility and by patient for a selected billing period.
+- The system must support grouping completed rides by tenant (facility or individual) and by patient for a selected billing period.
 - The system must include a billing status indicator (e.g., ready to bill, billed) so billing work can be paused and resumed.
 - The system must support exporting or generating a billing-friendly output (e.g., PDF summary or report) suitable for manual entry into QuickBooks.
-- System shall support generating patient-month billing packets grouped by facility and billing month.
+- System shall support generating patient-month billing packets grouped by tenant and billing month.
 - System shall support marking packets as sent/resubmitted/closed in QuickBooks.
-- System must support bulk status updates by facility + month to minimize manual work.
+- System must support bulk status updates by tenant + month to minimize manual work.
 
 ## Trip Structure and Special Cases
 - The system must treat a round trip as two independent trip legs.
