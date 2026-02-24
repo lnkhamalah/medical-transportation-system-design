@@ -14,6 +14,7 @@ Owner-operator who manages scheduling, dispatching, and billing oversight.
 - Maintain visibility into daily, weekly, and monthly trips
 - Ensure billing information is complete and accurate
 - Reduce administrative stress and rework
+- Clearly distinguish facility vs individual rides for grouping
 
 **Constraints**
 - Non-technical background
@@ -56,10 +57,10 @@ Completes assigned trips and documents mileage and timing for billing and accoun
 ## Persona 3: Billing / Administrative Function
 
 **Role**  
-Assembles completed rides and prepares invoices for facilities and patients.
+Assembles completed rides and prepares invoices for facilities and individual/private-pay riders.
 
 **Goals**
-- Group rides accurately by patient and facility
+- Group rides accurately by tenant and patient
 - Quickly verify which trips are billable
 - Minimize re-entry of data into accounting systems
 
@@ -71,4 +72,48 @@ Assembles completed rides and prepares invoices for facilities and patients.
 **Risks if System Fails**
 - Billing delays or rejections
 - Increased manual reconciliation
-- Financial loss or strained facility relationships
+- Financial loss or strained relationships
+
+---
+
+## Persona 4: Facility Portal User (Admin or User)
+
+**Role**  
+Facility staff member who submits and reviews ride requests.
+
+**Goals**
+- Submit requests quickly
+- View ride history for reconciliation
+- Cancel or contest trips before execution
+
+**Constraints**
+- May share responsibility with other staff
+- Admin roles may change over time
+- Does not control dispatch decisions
+
+**Risks if System Fails**
+- Inability to reconcile invoices
+- Duplicate or conflicting submissions
+- Confusion about trip status
+
+---
+
+## Persona 5: Individual / Private-Pay Rider
+
+**Role**  
+Schedules transportation without a facility affiliation.
+
+**Goals**
+- Submit ride requests easily
+- Receive confirmation that request was received
+- View ride history for payment tracking if desired
+
+**Constraints**
+- May not want to create an account
+- May have limited technical comfort
+- May rely on SMS confirmation
+
+**Risks if System Fails**
+- Confusion about whether ride was received
+- No visibility into ride history
+- Billing misunderstandings
