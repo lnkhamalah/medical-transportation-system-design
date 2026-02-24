@@ -25,6 +25,8 @@ This system must support non-technical users in a fast-paced environment. The de
   - Validate required fields before submission.
   - Basic logic checks (e.g., pickup time should not occur after end time for a completed leg).
 
+-**A clearly visible selection between “Healthcare Facility” and “Individual / Private Pay” must appear at the beginning of intake to prevent misclassification and downstream correction work.
+
 ## Design Constraints Derived from Cognitive Load
 
 The human-centered considerations in this project are not abstract preferences; they function as hard constraints on system design.
