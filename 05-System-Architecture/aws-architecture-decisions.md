@@ -118,7 +118,7 @@ Reasoning:
 - Low administrative overhead
 
 
-###Trust Boundaries
+**Trust Boundaries**
 
 The system enforces three trust zones:
 
