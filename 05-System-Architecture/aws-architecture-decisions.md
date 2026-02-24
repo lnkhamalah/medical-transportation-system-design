@@ -1,155 +1,115 @@
 # AWS Architecture Decisions (Design-Level)
 
-This document explains the AWS services selected for the Non-Emergency Medical Transportation system and why each choice supports business realism, security boundaries, and long-term maintainability.
+This document explains the AWS services selected for the system and why each choice supports business realism, security boundaries, and long-term maintainability.
 
-The design goal is a believable architecture that a small organization can operate: minimal infrastructure management, clear trust boundaries, and a relational database foundation.
-
----
-
-## Architecture goals
-
-- Support **public guest intake** without revealing internal data (no PHI disclosure via lookups).
-- Support **facility portal access** (FacilityUser / FacilityAdmin) with strict facility scoping.
-- Support **internal operational access** (Dispatcher / Driver / Billing) with role-based controls.
-- Preserve data integrity for billing and disputes (auditability, no silent overwrites).
-- Use a **relational database** for joins, grouping, and long-term reporting.
-- Keep operating overhead low (serverless where reasonable).
+The design goal is a believable architecture that a small organization can operate with minimal infrastructure management.
 
 ---
 
-## High-level components
+## Architecture Goals
 
-### 1) Frontend (static web UI)
-**Services**
-- Amazon S3 (static website hosting)
-- Amazon CloudFront (CDN + TLS termination)
+- Support public guest intake without revealing internal data
+- Support facility portal access with strict tenant scoping
+- Support internal operational access with role-based controls
+- Preserve data integrity for billing and disputes
+- Use a relational database foundation
+- Keep operating overhead low
+
+---
+
+## Service Selections and Rationale
+
+### Frontend
+- Amazon S3 (static hosting)
+- Amazon CloudFront (CDN + TLS)
 - Amazon Route 53 (DNS)
 
-**Why this fits**
-- Low cost and low maintenance.
-- CloudFront provides HTTPS, caching, and a safer public edge.
-- Separates UI deployment from backend access controls.
+Reasoning:
+- Low cost
+- Low maintenance
+- Secure edge delivery
+- Separation of UI from backend
 
 ---
 
-### 2) API entry layer (controlled access)
-**Services**
-- Amazon API Gateway (REST API)
+### API Entry
+- Amazon API Gateway
 
-**Why this fits**
-- Single front door for both public and authenticated API calls.
-- Enables authentication enforcement and request routing.
-- Supports throttling and basic abuse control.
+Reasoning:
+- Single entry point
+- Token validation
+- Throttling and abuse protection
+- Clear separation of public vs authenticated routes
 
 ---
 
-### 3) Application layer (business logic)
-**Services**
+### Application Logic
 - AWS Lambda
 
-**Why this fits**
-- No server management for a small business.
-- Scales automatically with demand spikes.
-- Central place to enforce authorization and business rules:
-  - trip creation + validation
-  - round-trip → leg generation
-  - facility scoping rules
-  - billing grouping logic
-  - patient matching/merge workflows (internal only)
+Reasoning:
+- Serverless scaling
+- Centralized enforcement of business rules
+- No infrastructure management burden
+- Cost aligned with usage patterns
 
 ---
 
-### 4) Database layer (relational system of record)
-**Services**
-- Amazon RDS (PostgreSQL preferred)
+### Database
+- Amazon RDS (PostgreSQL)
 
-**Why RDS (not DynamoDB)**
-- The data model is relational (Facility → TripRequest → TripLeg).
-- Billing and reporting require joins and grouping by facility/patient/month.
-- Referential integrity is important for dispute defensibility.
+Reasoning:
+- Relational data model requires joins
+- Strong ACID guarantees
+- Billing grouping and audit queries depend on relational consistency
+- Managed backups and patching
 
-**Core controls**
-- Private access only (no public endpoint exposure).
-- Encryption at rest enabled.
-- Automated backups enabled.
-
----
-
-### 5) Identity and access
-**Services**
-- Amazon Cognito User Pool
-
-**Design choice**
-- Single Cognito User Pool for all authenticated users.
-- Roles stored as Cognito Groups.
-- Facility scoping stored as custom attributes (e.g., facility_id, contact_id where applicable).
-- All authorization enforced server-side in Lambda (defense in depth).
-
-**User categories**
-- Internal: Dispatcher, Driver, Billing
-- Facility portal: FacilityAdmin, FacilityUser
-- Public/guest intake: no authentication (create-only)
+DynamoDB was not selected because:
+- Data model is relational
+- Billing workflows require grouping across entities
+- Referential integrity is critical
 
 ---
 
-### 6) Storage (snapshots and exports)
-**Services**
-- Amazon S3 (private bucket)
+### Identity
+- Amazon Cognito (single User Pool)
 
-**Use cases**
-- PDF exports (billing packets)
-- form snapshot archives
-- signature image storage (future enhancement only)
-
-**Core controls**
-- Block public access.
-- Encryption at rest enabled.
-- Access restricted to backend roles only.
+Reasoning:
+- Managed authentication
+- Supports role groups
+- Supports custom tenant attributes
+- Integrates with API Gateway authorizers
 
 ---
 
-### 7) Notifications (submission receipts + dispatcher copy)
-**Services**
-- Amazon SNS (SMS receipt notifications)
-- Amazon SES (email receipts and internal copies)
+### Storage
+- Amazon S3 (private buckets)
 
-**Business requirement supported**
-- Every request submission sends a confirmation to the requester (receipt-level content).
-- Every request submission sends a full copy to internal dispatcher/billing inbox (trusted path).
-
-**Privacy default**
-- SMS contains a receipt message only (avoid PHI/clinical details).
-- Email may include operational details but remains conservative by design.
+Reasoning:
+- Stores unstructured documents
+- Separates structured relational data from exports
+- Supports lifecycle retention policies
 
 ---
 
-### 8) Logging and audit
-**Services**
-- Amazon CloudWatch (application logs)
-- AWS CloudTrail (AWS account-level audit)
+### Notifications
+- Amazon SNS (SMS receipts)
+- Amazon SES (email confirmations)
 
-**Rules**
-- Log metadata, not PHI payloads.
-- Track create/update actions on dispute-sensitive records (TripRequest/TripLeg) and billing flags.
+Reasoning:
+- Supports business requirement for submission confirmation
+- Allows privacy-aware SMS design
+- Ensures dispatcher receives full request copy
 
 ---
 
-## Trust boundaries (what makes this secure and professional)
+### Logging
+- Amazon CloudWatch
+- AWS CloudTrail
 
-### Public guest intake (untrusted)
-- Can submit new trip requests only.
-- No read access.
-- No autosuggest or patient lookup endpoints exposed publicly.
-
-### Facility portal (trusted but limited)
-- FacilityUser sees: requests they submitted OR where they are the contact.
-- FacilityAdmin sees: all facility requests.
-- Facility roles can cancel pre-execution and submit disputes, but cannot edit completed trips or billing flags.
-
-### Internal operations (most trusted)
-- Dispatcher schedules and assigns drivers.
-- Drivers document completion per leg.
-- Billing groups trips and manages billing workflow flags.
+Reasoning:
+- Operational debugging
+- Audit visibility
+- Low administrative overhead
 
 ---
 
