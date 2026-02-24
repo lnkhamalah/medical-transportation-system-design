@@ -6,16 +6,19 @@ These requirements describe how the system must behave in order to be usable, re
 - The system must preserve the paper form’s ordering and familiar wording.
 - The system must be usable with minimal training for non-technical users.
 - The system must support users with moderate literacy and potential language barriers through clear labels and simple inputs.
+- The system must clearly distinguish between Healthcare Facility and Individual / Private Pay requesters to reduce confusion during intake.
 
 ## Reliability and Data Integrity
 - The system must prevent incomplete submissions of required fields.
-- The system must maintain consistent records for repeat patients, facilities, and billing periods.
+- The system must maintain consistent records for repeat patients and tenants (facility or individual).
+- The system must ensure every TripRequest is linked to exactly one tenant record.
 - The system must support accurate documentation of trip completion to protect against disputes.
-- The system must support Dispatcher/Owner correction of inaccuracies
-  
+- The system must support Dispatcher/Owner correction of inaccuracies.
+
 ## Security and Privacy
 - The system must support encryption in transit and encryption at rest.
-- The system must enforce role-based access (dispatcher, driver, billing) so users only see what they need.
+- The system must enforce role-based access (dispatcher, driver, billing, facility users) so users only see what they need.
+- The system must enforce tenant scoping to prevent cross-tenant data exposure.
 - The system must log or preserve changes to key records related to billing and completion confirmation.
 
 ## Maintainability and Scalability
