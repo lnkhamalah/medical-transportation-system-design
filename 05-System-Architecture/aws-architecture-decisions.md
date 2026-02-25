@@ -32,6 +32,17 @@ The design goal is a believable architecture that a small organization can opera
 - Secure edge delivery  
 - Separation of UI from backend  
 
+### Private Service Connectivity
+
+- **VPC Interface Endpoints (SNS, SES, SQS)**
+
+**Reasoning:**
+
+- Allows private communication between Lambda and AWS services
+- Eliminates need for public internet routing or NAT Gateway
+- Reduces attack surface
+- Keeps service-to-service communication within AWS private networking
+  
 ---
 
 ### API Entry
@@ -42,7 +53,8 @@ The design goal is a believable architecture that a small organization can opera
 
 - Single entry point  
 - Token validation  
-- Throttling and abuse protection  
+- Throttling, request rate limits, and payload size limits  
+- Integration with AWS WAF for bot mitigation and abuse protection   
 - Clear separation of public vs authenticated routes  
 
 ---
@@ -58,13 +70,17 @@ The design goal is a believable architecture that a small organization can opera
 - Lambda enforces role-based authorization and tenant scoping using claims extracted from the validated Cognito JWT  
 - Facility scoping is derived from token claims and never from client-supplied request data  
 - No infrastructure management burden  
-- Cost aligned with usage patterns  
+- Cost aligned with usage patterns
+- Supports asynchronous event publishing to Amazon SQS for resilient notification processing  
+- Prevents user-facing operations from being blocked by external notification delivery failures
+  
 
 ---
 
 ### Database
 
-- **Amazon RDS (PostgreSQL)**
+- **Amazon RDS (PostgreSQL, Multi-AZ)**
+- **Amazon RDS Proxy**
 
 **Reasoning:**
 
@@ -74,7 +90,12 @@ The design goal is a believable architecture that a small organization can opera
 - Managed backups and patching  
 
 RDS is deployed in a private subnet inside a VPC.  
-It has no public endpoint and accepts connections only from the Lambda security group.  
+It has no public endpoint and accepts connections only from the RDS Proxy security group.
+
+Application compute connects to the database through Amazon RDS Proxy to:
+- Manage connection pooling for Lambda concurrency
+- Protect the database from connection exhaustion
+- Centralize credential handling  
 Direct client-to-database access is not permitted.
 
 **DynamoDB was not selected because:**
@@ -112,14 +133,17 @@ Direct client-to-database access is not permitted.
 
 ### Notifications
 
-- **Amazon SNS** (SMS receipts)  
-- **Amazon SES** (email confirmations)  
+- **Amazon SQS** (notification queue)
+- **AWS Lambda (Notification Processor)**
+- **Amazon SNS** (SMS receipts)
+- **Amazon SES** (email confirmations)
 
 **Reasoning:**
 
-- Supports business requirement for submission confirmation  
-- Allows privacy-aware SMS design  
-- Ensures dispatcher receives full request copy  
+- Decouples notification delivery from primary business logic
+- Prevents trip submission failures due to SMS/email outages
+- Allows retry logic and independent scaling of notification processing
+- Ensures operational alerts (e.g., cancellations) reach both dispatcher and facility contact 
 
 ---
 
@@ -161,4 +185,9 @@ This AWS design is intentionally minimal but realistic:
 - Serverless business logic for low operational overhead  
 - Relational database foundation for integrity and billing workflows  
 - Cognito-based identity with strict server-side authorization  
-- Clear separation between public intake, facility portal, and internal operations  
+- Clear separation between public intake, facility portal, and internal operations
+- Asynchronous notification processing for operational resilience  
+- RDS Proxy protection against connection spikes  
+- WAF and API throttling for edge-layer defense  
+- Multi-AZ database deployment for availability  
+- Private VPC endpoints for secure service communication  
