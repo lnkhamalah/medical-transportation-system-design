@@ -9,7 +9,16 @@ This system handles transportation requests that may include personally identifi
 - Protect operational and billing integrity  
 - Minimize PHI/PII exposure through public intake  
 - Preserve auditability for dispute-sensitive and billing-sensitive actions  
-- Protect data in transit and at rest  
+- Protect data in transit and at rest
+- Enforce encryption using TLS for all external and internal service communication  
+- Ensure database and object storage encryption at rest using managed encryption keys
+
+The application connects to the database exclusively through Amazon RDS Proxy to:
+
+- Prevent connection exhaustion during Lambda concurrency spikes
+- Centralize credential management
+- Reduce database exposure risk
+    
 
 This is a layered security model designed for a small healthcare-adjacent organization.
 
@@ -49,6 +58,15 @@ The system supports three access categories:
 
 Public intake is strictly write-only.
 
+Public endpoints are protected by AWS WAF and API Gateway throttling controls to mitigate abuse, automated submissions, and denial-of-service attempts.
+
+API Gateway enforces:
+- JWT validation for authenticated routes
+- Payload size limits
+- Rate limiting
+- Schema-level input validation before Lambda execution
+  
+
 ---
 
 ## Authorization Model
@@ -61,6 +79,25 @@ Authorization is enforced through:
 - Contact identity matching rules  
 
 The system follows the **principle of least privilege**.
+
+Authorization decisions are derived exclusively from validated Cognito token claims and never from client-supplied request data.
+
+Tenant scoping (`facility_id`) is enforced server-side before any database query is executed.
+
+---
+
+## Notification Security Model
+
+Notifications are dispatched asynchronously through Amazon SQS and a dedicated Notification Lambda.
+
+Security controls include:
+
+- No direct client access to SNS or SES
+- All outbound notifications originate from controlled Lambda execution
+- SQS access restricted via IAM roles
+- SNS and SES accessed through VPC Interface Endpoints (no public internet path)
+
+This prevents notification systems from exposing sensitive operational data or becoming an attack surface.
 
 ---
 
@@ -124,7 +161,7 @@ Facility roles are intentionally restricted to prevent unauthorized data modific
 - View:
   - TripRequests they submitted  
   - TripRequests where they are the listed contact  
-- Request cancellation of a future TripLeg  
+- Request cancellation of a future TripLeg (subject to same-day restriction rules)  
 - Submit dispute or clarification requests  
 
 **Cannot:**
@@ -154,6 +191,12 @@ Facility roles are intentionally restricted to prevent unauthorized data modific
 
 FacilityAdmin is an oversight role, not an operational role.
 
+### Cancellation Enforcement Rules
+
+- Cancellation requests initiated by facility users are treated as state-transition requests and require dispatcher approval.
+- Same-day cancellation attempts are automatically denied and instruct the facility to contact dispatch by phone.
+- Approved cancellations generate notification events to both the dispatcher and the listed facility contact.
+  
 ---
 
 # Facility Portal Visibility Rules
@@ -166,3 +209,25 @@ May view all TripRequests where:
 
 ```sql
 TripRequest.facility_id = current_user.facility_id
+
+---
+
+## Logging and Audit Controls
+
+Logging is enabled at:
+
+- API Gateway
+- Lambda execution
+- Database audit layer
+
+Logs capture:
+
+- User ID
+- Role
+- Timestamp
+- Entity reference
+- Action performed
+
+Logs intentionally exclude PHI and sensitive payload content.
+
+Audit logs are immutable and support dispute resolution, billing defensibility, and forensic review.
