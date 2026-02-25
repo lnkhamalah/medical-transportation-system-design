@@ -8,6 +8,17 @@ Logical Flow:
 
 Client → CDN → Static Frontend → API Gateway → Lambda → RDS Proxy → Relational Database
 
+Public Ingress Protection Flow:
+
+Client → CloudFront → AWS WAF → API Gateway (Rate Limited) → Lambda
+
+Public intake endpoints additionally enforce:
+
+- CAPTCHA validation before request submission
+- Per-IP rate limiting
+- Payload size restrictions
+- Bot and reputation filtering via AWS WAF
+
 Asynchronous Notification Flow:
 
 Lambda → SQS → Notification Lambda → SNS / SES
@@ -60,6 +71,12 @@ API Gateway enforces:
 
 All public endpoints apply strict input validation rules before invoking application logic.
 
+Public intake endpoints also enforce CAPTCHA verification to reduce automated abuse.
+
+Rate-based rules within AWS WAF automatically block excessive or suspicious request patterns before Lambda invocation.
+
+This ensures that automated spam or denial-of-service attempts cannot trigger large-scale database writes or notification floods.
+
 Public intake endpoints are write-only.
 
 Authenticated endpoints require valid tokens.
@@ -82,12 +99,17 @@ Authenticated endpoints require valid tokens.
 - Cancellation request workflow enforcement
 - Same-day cancellation restriction logic
 - Asynchronous event publishing for notification dispatch
+- Public intake submissions are initially marked with an internal "unverified" status until reviewed or confirmed by dispatch
 
 This layer centralizes all business rules and prevents direct database access from clients.
 
 All cancellation requests initiated by facility users are treated as request-based state transitions. 
 
 Same-day cancellation attempts are automatically denied and instruct the facility to contact dispatch by phone. This prevents operational disruption when dispatch staff may not be actively monitoring the portal.
+
+Similarly, public intake submissions do not automatically assign drivers or trigger billing workflows. Dispatcher confirmation is required before operational scheduling proceeds.
+
+This prevents automated or malicious submissions from entering active workflow queues.
 
 Approved cancellations trigger asynchronous notification events to both the dispatcher and the listed contact.
 
@@ -165,6 +187,14 @@ Upon submission or state transition of a TripRequest:
    - SMS via Amazon SNS
    - Email via Amazon SES
 
+Notification content is intentionally segmented:
+
+- Requesters receive structured confirmation summaries containing service date, time window, and confirmation reference.
+- Dispatcher receives a full intake snapshot copy for operational redundancy.
+- A canonical PDF snapshot of each intake submission is stored in encrypted S3 for immutable archival.
+
+Sensitive internal metadata or billing-related flags are not transmitted in external emails.
+
 This design ensures:
 
 - Trip creation does not fail if SMS or email services are temporarily unavailable
@@ -193,3 +223,8 @@ Logging is enabled at:
 Logs capture metadata and action history but avoid storing PHI in log payloads.
 
 This supports dispute resolution and operational debugging.
+
+Monitoring also includes detection of abnormal request spikes, rate-limit triggers, and repeated failed CAPTCHA validations.
+
+These signals can be used to temporarily tighten rate limits or block suspicious IP ranges via AWS WAF without interrupting legitimate operational traffic.
+
