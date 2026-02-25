@@ -39,7 +39,11 @@ Database components are deployed in a multi-AZ configuration to prevent single-z
 
 Handles inbound HTTPS traffic.
 
-AWS WAF provides request filtering, rate-based protections, and bot mitigation before traffic reaches API Gateway.
+API Gateway enforces per-IP throttling and burst limits to prevent automated request flooding and abuse attempts.
+
+AWS WAF provides request filtering, rate-based protections, IP reputation filtering, and bot mitigation before traffic reaches API Gateway.
+
+Public intake endpoints additionally require CAPTCHA validation at the application layer before request submission is accepted.
 
 No persistence components reside here.
 
@@ -65,6 +69,8 @@ Notification Lambda consumes events from Amazon SQS and dispatches outbound noti
 
 No component in the application subnet exposes a public endpoint.
 
+Notification dispatch is decoupled through Amazon SQS, allowing outbound message rates to be controlled independently of inbound request volume. This prevents sudden spikes in intake submissions from immediately triggering large-scale outbound notification floods.
+
 These functions are not publicly accessible directly.  
 They are invoked only through API Gateway.
 
@@ -76,7 +82,6 @@ They are invoked only through API Gateway.
   - RDS Proxy → RDS
   - Lambda → SQS
   - Lambda → VPC Endpoints (SNS, SES, SQS)
-- No inbound internet access
 - No inbound internet access
 
 ---
@@ -114,6 +119,8 @@ There are three trust zones:
 3. Data Layer (restricted persistence)  
 
 Movement between zones requires authenticated and authorized transitions.
+
+Ingress traffic is continuously evaluated through AWS WAF rate-based rules and monitoring alerts to detect abnormal submission patterns. Suspicious IP ranges can be blocked without affecting legitimate operational traffic.
 
 All service-to-service communication within the VPC occurs over private networking. No database, queue, or notification service is directly accessible from the public internet.
 
