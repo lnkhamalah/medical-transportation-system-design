@@ -8,7 +8,8 @@ This system handles transportation requests that may include personally identifi
 - Enforce strict role-based access control (internal and facility-facing roles)  
 - Protect operational and billing integrity  
 - Minimize PHI/PII exposure through public intake  
-- Preserve auditability for dispute-sensitive and billing-sensitive actions  
+- Preserve auditability for dispute-sensitive and billing-sensitive actions
+- Prevent automated abuse from degrading operational reliability or notification reputation    
 - Protect data in transit and at rest
 - Enforce encryption using TLS for all external and internal service communication  
 - Ensure database and object storage encryption at rest using managed encryption keys
@@ -58,7 +59,13 @@ The system supports three access categories:
 
 Public intake is strictly write-only.
 
-Public endpoints are protected by AWS WAF and API Gateway throttling controls to mitigate abuse, automated submissions, and denial-of-service attempts.
+Public endpoints are protected by layered edge defenses:
+
+- AWS WAF with rate-based rules and IP reputation filtering
+- API Gateway throttling and burst limits
+- CAPTCHA enforcement for unauthenticated intake submissions
+
+These controls mitigate automated abuse, bot-driven form flooding, and denial-of-service attempts before application logic is invoked.
 
 API Gateway enforces:
 - JWT validation for authenticated routes
@@ -98,6 +105,39 @@ Security controls include:
 - SNS and SES accessed through VPC Interface Endpoints (no public internet path)
 
 This prevents notification systems from exposing sensitive operational data or becoming an attack surface.
+
+### Notification Content Segmentation
+
+Outbound notifications follow a dual-layer strategy:
+
+- Requesters receive structured confirmation summaries with limited operational details.
+- Dispatcher receives full intake copy for operational redundancy.
+- Canonical intake snapshots are stored in encrypted S3 for archival integrity.
+
+This approach:
+
+- Preserves legal defensibility
+- Reduces external PII/PHI exposure
+- Maintains operational continuity if application access is temporarily unavailable
+---
+
+## Abuse Containment and Deliverability Protection
+
+The system is designed to prevent automated intake abuse from escalating into outbound notification flooding.
+
+Controls include:
+
+- API Gateway rate limits per IP
+- AWS WAF rate-based blocking
+- CAPTCHA validation for public intake
+- SQS decoupling to buffer outbound notifications
+- Notification Lambda concurrency controls
+- SES sending quotas and bounce/complaint monitoring
+
+These layered controls ensure that malicious or automated submissions cannot generate uncontrolled email or SMS volume.
+
+The primary risk in abuse scenarios is deliverability degradation, not infrastructure cost.  
+The architecture prioritizes preserving notification reputation and operational signal clarity.
 
 ---
 
