@@ -52,3 +52,65 @@ This prevents database bloat and supports scalable retention.
 Dispatcher, driver, and billing roles have different permissions and data visibility requirements.
 
 Authorization must be enforced at the token and application layer, not solely in the UI.
+
+## 8. Write-Only Public Intake
+
+Public intake endpoints must never expose internal system data.
+
+Guest users may submit transportation requests without authentication, but they must not:
+
+- query existing patients
+- retrieve trip history
+- access facility records
+- receive internal identifiers
+
+Public intake is strictly write-only and returns receipt-level confirmation only. All data exposure requires authenticated and authorized access.
+
+## 9. Asynchronous Notification Decoupling
+
+Notification delivery must not block transactional persistence.
+
+Trip creation and status changes are committed before notification processing occurs. Notification events are published to a message queue and processed separately to prevent downstream SMS or email failures from interrupting core operations.
+
+This design ensures operational continuity during temporary notification service disruptions.
+
+## 10. Controlled Cancellation Governance
+
+Cancellations are not destructive actions and must follow explicit governance rules.
+
+- Facility roles may request cancellation of future `TripLeg` records.
+- Same-day cancellation requests are denied through the portal and require direct phone communication.
+- Upon a cancellation request, the dispatcher receives a notification and must finalize the cancellation.
+- Once finalized, confirmation notifications are sent to:
+  - the facility contact
+  - the dispatcher
+
+This prevents operational blind spots and ensures drivers are not unexpectedly impacted by late changes.
+
+## 11. Immutable Operational Records
+
+Completion data entered by drivers must be treated as immutable once finalized.
+
+Facility roles may not edit or overwrite:
+
+- completion timestamps
+- odometer readings
+- driver-entered notes
+- billing flags
+
+Cancellations and disputes are recorded as state transitions or separate records rather than destructive edits.
+
+This preserves billing defensibility and audit integrity.
+
+## 12. Defense-in-Depth Hardening
+
+Security controls operate at multiple layers:
+
+- edge filtering via AWS WAF
+- API throttling and request size limits
+- CAPTCHA for public intake abuse mitigation
+- server-side role validation using token claims
+- tenant scoping enforced before database query execution
+- network isolation of the persistence layer
+
+No single control is relied upon in isolation. The architecture assumes that any individual layer could fail and compensates accordingly.
