@@ -6,7 +6,11 @@ The system uses a layered, serverless architecture deployed within a VPC-isolate
 
 Logical Flow:
 
-Client → CDN → Static Frontend → API Gateway → Lambda → Relational Database
+Client → CDN → Static Frontend → API Gateway → Lambda → RDS Proxy → Relational Database
+
+Asynchronous Notification Flow:
+
+Lambda → SQS → Notification Lambda → SNS / SES
 
 Supporting components include:
 
@@ -47,6 +51,15 @@ This design eliminates the need for managed web servers and reduces attack surfa
 
 All external traffic enters through this controlled gateway.
 
+API Gateway enforces:
+
+- Request throttling and rate limits
+- Payload size limits
+- JWT token validation (for authenticated routes)
+- Integration with AWS WAF for abuse and bot protection
+
+All public endpoints apply strict input validation rules before invoking application logic.
+
 Public intake endpoints are write-only.
 
 Authenticated endpoints require valid tokens.
@@ -66,8 +79,18 @@ Authenticated endpoints require valid tokens.
 - Status transitions
 - Enforcement of role permissions
 - Enforcement of tenant isolation
+- Cancellation request workflow enforcement
+- Same-day cancellation restriction logic
+- Asynchronous event publishing for notification dispatch
 
 This layer centralizes all business rules and prevents direct database access from clients.
+
+All cancellation requests initiated by facility users are treated as request-based state transitions. 
+
+Same-day cancellation attempts are automatically denied and instruct the facility to contact dispatch by phone. This prevents operational disruption when dispatch staff may not be actively monitoring the portal.
+
+Approved cancellations trigger asynchronous notification events to both the dispatcher and the listed contact.
+
 
 The serverless model was selected due to event-driven workload characteristics and low steady-state compute demand.
 
@@ -84,6 +107,8 @@ The serverless model was selected due to event-driven workload characteristics a
 - Enforce tenant association on all TripRequests
 
 The database resides in a private subnet and is not publicly accessible.
+
+Application compute connects to the database through Amazon RDS Proxy to manage connection pooling and protect the database from Lambda concurrency spikes.
 
 PostgreSQL is preferred due to strong relational support and maturity.
 
@@ -130,15 +155,30 @@ All authorization decisions are enforced server-side in Lambda.
 
 ## Notifications
 
-Upon submission of a TripRequest:
+The system uses an asynchronous notification pattern to prevent user-facing delays and to improve resiliency.
 
-- A full copy is sent to the dispatcher/billing inbox (trusted internal path)
-- A confirmation receipt is sent to the requester
+Upon submission or state transition of a TripRequest:
 
-SMS messages contain receipt-level content only (no sensitive detail).  
-Email may contain operational details but avoids clinical context.
+1. The primary Lambda publishes a notification event to Amazon SQS.
+2. A dedicated Notification Lambda consumes the queue.
+3. The Notification Lambda sends:
+   - SMS via Amazon SNS
+   - Email via Amazon SES
 
-Notification events are logged.
+This design ensures:
+
+- Trip creation does not fail if SMS or email services are temporarily unavailable
+- Notification retries can occur independently
+- Operational workflows are not blocked by third-party delivery delays
+
+### Cancellation Notifications
+
+When a cancellation is approved:
+
+- A notification is sent to the facility contact
+- A notification is sent to the dispatcher
+
+Same-day cancellation attempts are denied automatically and instruct the facility to call dispatch directly.
 
 ---
 
