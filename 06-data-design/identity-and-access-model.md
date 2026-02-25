@@ -102,6 +102,9 @@ Each role can view/modify only what they need.
 ### 2) Server-side Enforcement
 The backend (Lambda) enforces all authorization, even if the UI hides features.
 
+All authenticated endpoints are protected by API Gateway JWT validation and AWS WAF. 
+Rate limits, payload size limits, and schema validation occur before Lambda execution to reduce abuse risk.
+
 ### 3) Facility Scoping
 Facility-facing users are always scoped by `facility_id`.
 
@@ -159,7 +162,7 @@ Can:
 - submit new trip requests
 - view requests they submitted
 - view requests where they are the listed contact
-- cancel trips prior to execution (request cancellation action)
+- request cancellation of future trips (subject to same-day restriction rules)
 - submit dispute/clarification requests
 
 Cannot:
@@ -183,6 +186,15 @@ Cannot:
 - change billing flags
 - merge patients directly
 - delete trip records
+
+---
+
+### Cancellation Enforcement Rules
+
+- Cancellation requests are treated as state-transition requests and require dispatcher approval.
+- Same-day cancellation attempts are automatically denied and instruct the facility to contact dispatch by phone.
+- Approved cancellations trigger notifications to both the dispatcher and the facility contact.
+- All cancellation requests and outcomes are logged for audit purposes.
 
 ---
 
@@ -251,6 +263,13 @@ Example:
 
 **Email:** may include limited operational details (date/time), but avoid sensitive context.
 
+Notifications are dispatched asynchronously through Amazon SQS and a dedicated Notification Lambda. 
+
+This ensures:
+- Trip submission does not fail if SMS/email services are temporarily unavailable
+- Notification retries occur independently of primary business logic
+- Operational alerts (e.g., cancellations) reliably reach both dispatcher and facility contact
+
 ---
 
 ## Guest → FacilityUser Conversion
@@ -273,6 +292,8 @@ Historical TripRequests can be linked to the new FacilityContact by:
 ---
 
 ## Data Model Requirements (ERD Impact)
+
+Application compute connects to the relational database exclusively through Amazon RDS Proxy to prevent connection exhaustion and centralize credential handling. Identity-based authorization is always evaluated before database access is attempted.
 
 This Identity & Access model implies the database needs a minimal concept of:
 
@@ -321,6 +342,12 @@ Prevented by:
 - no lookup endpoints in public intake
 - public can only create new TripRequest submissions
 
+### Abuse of cancellation workflow
+Prevented by:
+- Same-day cancellation denial logic
+- Dispatcher approval requirement
+- Audit logging of all state transitions
+- Notification confirmation to both parties
 ---
 
 ## Deferred Decisions (Explicit)
