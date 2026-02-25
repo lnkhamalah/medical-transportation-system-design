@@ -58,6 +58,25 @@ The design goal is a believable architecture that a small organization can opera
 - Clear separation of public vs authenticated routes  
 
 ---
+---
+
+### Edge Protection and Abuse Mitigation
+
+- **AWS WAF**
+- **API Gateway Rate Limiting**
+- **CAPTCHA Enforcement (Public Intake Only)**
+
+**Reasoning:**
+
+- Prevents automated submission abuse before reaching application logic
+- Blocks suspicious IP ranges using rate-based and reputation rules
+- Enforces per-IP throttling and burst limits
+- Requires CAPTCHA validation for unauthenticated public intake submissions
+- Reduces risk of notification flooding or database write amplification
+
+Public intake endpoints represent the primary external attack surface. Layered edge protection ensures that abuse attempts are filtered before invoking Lambda or generating outbound notifications.
+
+This reduces reputational risk, protects email deliverability, and preserves operational signal clarity.
 
 ### Application Logic
 
@@ -143,7 +162,14 @@ Direct client-to-database access is not permitted.
 - Decouples notification delivery from primary business logic
 - Prevents trip submission failures due to SMS/email outages
 - Allows retry logic and independent scaling of notification processing
-- Ensures operational alerts (e.g., cancellations) reach both dispatcher and facility contact 
+- Provides controlled outbound rate management during traffic spikes
+- Prevents automated intake abuse from immediately triggering large-scale outbound messaging
+- Supports segmented notification content:
+  - Structured confirmation summaries sent to requesters
+  - Full intake snapshot copies sent only to dispatcher
+  - Canonical PDF archive stored in encrypted S3
+
+This approach balances operational redundancy, legal defensibility, and exposure minimization. 
 
 ---
 
@@ -188,6 +214,6 @@ This AWS design is intentionally minimal but realistic:
 - Clear separation between public intake, facility portal, and internal operations
 - Asynchronous notification processing for operational resilience  
 - RDS Proxy protection against connection spikes  
-- WAF and API throttling for edge-layer defense  
+- Layered edge protection (WAF, rate limiting, CAPTCHA) for abuse mitigation   
 - Multi-AZ database deployment for availability  
 - Private VPC endpoints for secure service communication  
