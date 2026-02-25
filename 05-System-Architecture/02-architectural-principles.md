@@ -49,7 +49,9 @@ This prevents database bloat and supports scalable retention.
 
 ## 7. Explicit Role Segmentation
 
-Dispatcher, driver, and billing roles have different permissions and data visibility requirements.
+Dispatcher, driver, billing, FacilityAdmin, and FacilityUser roles have distinct permissions and data visibility requirements.
+
+Internal roles manage operational workflow and billing state transitions. Facility roles are intentionally restricted to submission, visibility, and request-based actions (e.g., cancellation requests), and may not directly modify operational or billing-critical records.
 
 Authorization must be enforced at the token and application layer, not solely in the UI.
 
