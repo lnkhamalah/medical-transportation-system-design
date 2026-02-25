@@ -22,6 +22,9 @@ The system uses a single VPC with the following segmentation:
 - Private Application Subnet
 - Private Database Subnet
 
+The VPC spans multiple Availability Zones to support high availability for database and compute resources.
+
+Database components are deployed in a multi-AZ configuration to prevent single-zone failure from impacting availability.
 ---
 
 ## Public Edge Layer
@@ -29,11 +32,14 @@ The system uses a single VPC with the following segmentation:
 ### Components
 
 - Amazon CloudFront
+- AWS WAF (attached to CloudFront / API Gateway)
 - Amazon API Gateway
 
 ### Purpose
 
 Handles inbound HTTPS traffic.
+
+AWS WAF provides request filtering, rate-based protections, and bot mitigation before traffic reaches API Gateway.
 
 No persistence components reside here.
 
@@ -45,11 +51,19 @@ No direct database access is permitted.
 
 ### Components
 
-- AWS Lambda functions attached to VPC
+- Primary AWS Lambda functions (business logic)
+- Notification Lambda
+- Amazon SQS (notification queue)
+- Amazon RDS Proxy
+- VPC Interface Endpoints (SNS, SES, SQS)
 
 ### Purpose
 
-Lambda functions execute business logic and are the only components allowed to communicate with the database.
+Primary Lambda functions execute business logic and are the only components allowed to communicate with the database through Amazon RDS Proxy.
+
+Notification Lambda consumes events from Amazon SQS and dispatches outbound notifications via SNS and SES using VPC Interface Endpoints.
+
+No component in the application subnet exposes a public endpoint.
 
 These functions are not publicly accessible directly.  
 They are invoked only through API Gateway.
@@ -57,7 +71,12 @@ They are invoked only through API Gateway.
 ### Security Controls
 
 - No public IP assignment
-- Security group allowing outbound access only to the RDS security group
+- Security groups allowing:
+  - Lambda → RDS Proxy
+  - RDS Proxy → RDS
+  - Lambda → SQS
+  - Lambda → VPC Endpoints (SNS, SES, SQS)
+- No inbound internet access
 - No inbound internet access
 
 ---
@@ -66,7 +85,7 @@ They are invoked only through API Gateway.
 
 ### Component
 
-- Amazon RDS (PostgreSQL)
+- Amazon RDS (PostgreSQL, Multi-AZ)
 
 ### Isolation Strategy
 
@@ -75,11 +94,12 @@ The database:
 - Resides in a private subnet
 - Has no public endpoint
 - Is not accessible from the internet
-- Accepts connections only from the Lambda security group
+- Accepts connections only from the RDS Proxy security group
+  
 
 This enforces a strict one-way trust boundary:
 
-Client → API → Lambda → Database
+Client → API → Lambda → RDS Proxy → Database
 
 Direct Client → Database communication is impossible by design.
 
@@ -94,6 +114,8 @@ There are three trust zones:
 3. Data Layer (restricted persistence)  
 
 Movement between zones requires authenticated and authorized transitions.
+
+All service-to-service communication within the VPC occurs over private networking. No database, queue, or notification service is directly accessible from the public internet.
 
 ---
 
