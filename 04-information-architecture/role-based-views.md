@@ -28,6 +28,7 @@ These views are defined before database and architecture decisions to ensure the
     - Wheelchair needs
     - Tenant (Facility name or Individual account)
     - Requester type (Facility or Individual)
+    - Current status (Scheduled / Assigned)
 
 - **Daily Schedule View**
   - All trip legs for a selected day
@@ -35,6 +36,8 @@ These views are defined before database and architecture decisions to ensure the
   - Driver assignment visible
   - Status indicators:
     - scheduled
+    - assigned
+    - in-progress
     - completed
     - cancelled
     - no-show
@@ -46,7 +49,7 @@ These views are defined before database and architecture decisions to ensure the
 
 ### Actions allowed
 
-- Create or edit trip requests
+- Create or edit trip requests (before execution)
 - Confirm requester type (Healthcare Facility or Individual / Private Pay)
 - Confirm one-way vs round trip
 - Split round trip into two legs (outbound + return)
@@ -54,6 +57,11 @@ These views are defined before database and architecture decisions to ensure the
 - Update times (pickup, appointment, back time, will-call changes)
 - Mark or record exceptions (cancelled, no-show, rescheduled)
 - Link trip requests to existing tenant records (facility or individual)
+
+### Restrictions
+
+- Cannot modify **completed trip data**
+- Cannot alter billing records after they are marked as billed/paid
 
 ### Information required in this view
 
@@ -86,6 +94,7 @@ Drivers do not manage tenant grouping or billing workflows. They only see assign
     - Patient
     - Mobility needs
     - Tenant name (for context only)
+    - Status (Assigned / In Progress / Completed)
 
 - **Trip Leg Detail View**
   - Shows the original intake information relevant to the trip
@@ -103,6 +112,7 @@ Drivers do not manage tenant grouping or billing workflows. They only see assign
 ### Actions allowed
 
 - View assigned trip legs for the day
+- Start trip (status → In Progress)
 - Record completion data per leg
 - Mark trip leg status:
   - completed
@@ -110,10 +120,13 @@ Drivers do not manage tenant grouping or billing workflows. They only see assign
   - no-show
 - Add brief notes when exceptions occur (optional)
 
+### Restrictions
+
 Drivers cannot:
 - Edit intake data
 - Modify tenant association
 - Change billing status
+- Edit completion data after submission (immutable)
 
 ### Information required in this view
 
@@ -153,17 +166,20 @@ Billing grouping is performed by tenant, which may represent either:
     - paid
   - Allows stopping and restarting billing without losing place
 
-- **Export / Summary Output**
-  - Exportable report (PDF/CSV)
-  - Suitable for billing entry into QuickBooks
+- **Billing Output Panel (Enhanced)**
+  - System-generated, invoice-ready summaries
+  - Human-readable format for QuickBooks entry
+  - Supports copy/paste or export
 
 ### Actions allowed
 
 - Filter for completed trip legs
 - Group by tenant and patient
-- Verify completion documentation exists
+- Validate completion documentation
 - Mark billing progress status
-- Export billing summaries
+- Export or copy billing summaries
+
+### Restrictions
 
 Billing users cannot:
 - Modify driver-recorded completion data
@@ -254,6 +270,8 @@ If registered:
 ### Status Vocabulary (Consistent Across Views)
 
 - scheduled
+- assigned
+- in-progress
 - completed
 - cancelled
 - no-show
@@ -269,8 +287,10 @@ Defining role-based and tenant-scoped views implies the system must support:
 
 - Role-based access control (RBAC)
 - Tenant isolation (facility or individual)
+- Explicit lifecycle state management
 - Separate data capture moments across time:
-  - request → schedule → complete → bill
+  - request → schedule → execute → complete → bill
 - Queryable structure that supports grouping by tenant, patient, and date range
 - Fast driver interaction with minimal steps and strong documentation integrity
 - Strict prevention of cross-tenant data exposure
+- Assisted billing workflows that reduce manual reconstruction
