@@ -7,9 +7,9 @@ This document explains how the selected system architecture directly satisfies t
 It connects business objectives to specific technical design decisions and explains both:
 
 - The architectural reasoning, and  
-- The practical impact on cashflow, risk exposure, operational control, and long-term enterprise value.
+- The practical impact on cashflow, risk exposure, operational control, billing accuracy, and long-term enterprise value.
 
-This section is intended to orient business leadership and technical reviewers before they proceed into detailed architecture, security, and data model documentation.
+This section is intended to orient business leadership and technical reviewers before they proceed into detailed architecture, security, data model, and billing workflow documentation.
 
 ---
 
@@ -34,6 +34,7 @@ Identified risks include:
 - Revenue disputes  
 - Dispatcher overload  
 - Manual reconstruction of trip history  
+- Billing errors due to interpretation rather than structured data  
 
 The architecture is designed to enforce the following invariants:
 
@@ -43,6 +44,7 @@ The architecture is designed to enforce the following invariants:
 4. Billing state transitions are controlled.  
 5. Cancellation events are auditable.  
 6. Infrastructure failure does not compromise data integrity.  
+7. Billing outputs are derived from structured operational data, not manual reconstruction.  
 
 These invariants guide all system design decisions.
 
@@ -52,7 +54,7 @@ This project is not about digitizing a paper form. It is about eliminating opera
 
 Without structural enforcement, billing delays and documentation gaps compound over time. Small inefficiencies eventually turn into cashflow slowdowns, dispute exposure, and administrative fatigue.
 
-By designing around strict invariants — tenant isolation, immutable completion records, structured billing states — the business gains control over its operational data instead of reacting to it.
+By designing around strict invariants — tenant isolation, immutable completion records, structured billing states, and system-derived billing outputs — the business gains control over its operational data instead of reacting to it.
 
 This architecture reduces the risk of revenue leakage, minimizes the cost of reconstructing information during disputes, and improves billing predictability. It also creates a durable operational record that increases long-term business value.
 
@@ -81,7 +83,7 @@ Each layer has a specific responsibility:
 
 - CloudFront enforces secure delivery.
 - API Gateway validates entry and throttles abuse.
-- Lambda enforces business rules and authorization.
+- Lambda enforces business rules, authorization, and billing preparation logic.
 - RDS enforces relational integrity and transaction safety.
 - VPC boundaries prevent direct database exposure.
 
@@ -96,6 +98,8 @@ This layered structure means the system cannot be casually bypassed or manipulat
 Many small business systems rely on frontend logic alone. If someone modifies a request or bypasses a form, the backend often trusts that input. This design does not.
 
 All enforcement occurs server-side, meaning tenant boundaries, billing controls, and record integrity are protected even if the interface is misused.
+
+Additionally, billing preparation logic is centralized in the backend, ensuring consistency in how invoice-ready data is generated.
 
 From a business perspective, this reduces operational risk and protects against preventable mistakes. It ensures that growth in usage does not introduce instability.
 
@@ -138,7 +142,7 @@ Businesses that implement clean tenant isolation early avoid expensive restructu
 
 ---
 
-# 4. Billing Integrity and Immutable Completion Records
+# 4. Billing Integrity, Translation Layer, and Immutable Completion Records
 
 ## Technical Design
 
@@ -147,6 +151,7 @@ Businesses that implement clean tenant isolation early avoid expensive restructu
 - Facility roles cannot edit completed records.
 - Billing flags are restricted to billing roles.
 - Cancellation is a workflow event, not a destructive edit.
+- Billing outputs are generated through a structured translation layer derived from trip and trip leg data.
 
 Round trips are split into two `TripLeg` records to preserve independent control.
 
@@ -160,11 +165,13 @@ When completion records can be edited retroactively, disputes become subjective.
 
 This design prevents silent deletion of trips, retroactive edits, and billing manipulation. It protects both revenue and credibility.
 
+The introduction of a billing translation layer removes the need for manual interpretation of trip records when preparing invoices.
+
+Instead of reconstructing trips at the end of the month, the system continuously prepares invoice-ready outputs that can be reviewed and approved.
+
 Splitting round trips into independent legs prevents confusion when return legs are canceled due to hospital admission or other changes.
 
 From a cashflow perspective, this reduces invoice friction. From a legal perspective, it strengthens defensibility. From a long-term asset perspective, it creates trustworthy historical records.
-
-Many small providers discover documentation weaknesses only after a dispute arises. This architecture proactively prevents those weaknesses.
 
 ---
 
@@ -213,7 +220,7 @@ It also reinforces operational maturity. Instead of reacting to last-minute digi
 
 Core data transactions are atomic and durable.
 
-Notification failure does not interrupt trip creation.
+Notification failure does not interrupt trip creation or billing preparation.
 
 ## What This Means for the Business
 
@@ -221,13 +228,11 @@ Infrastructure failures happen.
 
 What matters is whether they disrupt operations.
 
-With Multi-AZ deployment, the system continues operating even if a data center zone fails. With connection pooling, traffic spikes do not overwhelm the database. With decoupled notifications, delayed SMS or email does not stop scheduling.
+With Multi-AZ deployment, the system continues operating even if a data center zone fails. With connection pooling, traffic spikes do not overwhelm the database. With decoupled notifications, delayed SMS or email does not stop scheduling or billing preparation.
 
 For the business, this means continuity. Trips are not lost because of temporary service issues. Billing data is not corrupted during traffic spikes.
 
 Many small systems operate on fragile hosting environments where a single failure can halt operations. This architecture avoids that fragility.
-
-It establishes resilience more commonly associated with larger organizations, but without requiring an internal IT department.
 
 ---
 
@@ -237,8 +242,9 @@ It establishes resilience more commonly associated with larger organizations, bu
 
 - Reusable Facility and Patient records reduce duplication.
 - Group-by tenant and patient-month logic supports billing cycles.
-- Billing state transitions (`ready → billed → paid`) are structured.
-- Bulk updates are supported.
+- Billing state transitions (`not_ready → pending_review → approved → exported → paid`) are structured.
+- Billing translation outputs are generated continuously as trips are completed.
+- Bulk updates and review workflows are supported.
 
 All data is relational and queryable.
 
@@ -246,15 +252,15 @@ All data is relational and queryable.
 
 Manual re-entry into accounting systems is time-consuming and error-prone.
 
-Structured grouping dramatically reduces the time required to prepare invoices. Billing work can be paused and resumed without losing state.
+This system replaces end-of-month reconstruction with continuous billing preparation.
+
+Trips are translated into invoice-ready outputs as they are completed, allowing billing work to be distributed over time instead of concentrated into a single administrative burden.
 
 Clear billing status tracking reduces uncertainty and supports faster cycle completion.
 
 Faster billing means improved cashflow timing. Reduced re-entry reduces clerical risk.
 
 Over time, this compounds into measurable administrative savings and greater financial predictability.
-
-Organizations that structure billing data early avoid scaling administrative headcount unnecessarily. This design supports operational leverage.
 
 ---
 
@@ -265,7 +271,7 @@ Organizations that structure billing data early avoid scaling administrative hea
 - Serverless compute scales automatically with demand.
 - Tenant model supports additional facilities.
 - Role segmentation supports additional staff.
-- Relational model supports expanded reporting and automation.
+- Relational model supports expanded reporting, automation, and external integrations (e.g., accounting systems).
 
 Core architectural decisions are extensible.
 
@@ -277,11 +283,9 @@ This architecture avoids that reset.
 
 Because compute scales automatically and data is structured relationally, additional drivers, facilities, or volume do not require architectural replacement.
 
-That preserves continuity and protects the investment in process and training.
+Additionally, the structured billing layer enables future integration with accounting systems (e.g., QuickBooks) without redesigning core workflows.
 
-From a competitive standpoint, it positions the company as operationally mature. From an asset standpoint, it increases the long-term durability of internal systems.
-
-The system is built to grow with the business rather than constrain it.
+This preserves continuity and protects the investment in process and training.
 
 ---
 
@@ -292,13 +296,15 @@ This architecture is intentionally structured to:
 - Enforce tenant isolation  
 - Protect billing integrity  
 - Preserve immutable completion records  
+- Introduce a structured billing translation layer  
 - Govern cancellation workflows  
 - Tolerate infrastructure failure  
 - Reduce administrative overhead  
 - Improve cashflow predictability  
-- Support long-term growth  
+- Support future automation and integration  
+- Enable long-term growth  
 
-It converts intake from passive data collection into structured operational infrastructure.
+It converts intake from passive data collection into structured operational and financial infrastructure.
 
 It is not a static website.
 
