@@ -9,6 +9,8 @@ The data model supports:
 - Audit protection (what was entered for a specific trip remains historically accurate)
 - Autosuggest to reduce duplicate names and phone entry errors
 - Multi-tenant isolation (Healthcare Facility or Individual / Private Pay)
+- Human-in-the-loop billing review before final accounting entry
+- Translation of structured trip data into billing-ready language
 
 This is a design artifact only (no implementation required for IT599).
 
@@ -175,7 +177,8 @@ Central record connecting:
 
 ### System Fields
 
-- status (required) – enum (draft, scheduled, completed, cancelled)
+- status (required) – enum (draft, scheduled, completed, cancelled, no_show)
+- billing_review_status (required) – enum (not_ready, pending_review, approved, edited, exported)
 - created_at (required)
 - updated_at (required)
 
@@ -185,6 +188,8 @@ Central record connecting:
 - If facility_type = individual:
   - contact fields represent the individual.
 - TripRequest snapshot fields preserve original intake truth.
+- status reflects the operational outcome of the request.
+- billing_review_status reflects whether the request has been translated and reviewed for billing purposes.
 
 ---
 
@@ -195,6 +200,10 @@ Central record connecting:
 One completed transport leg.
 
 A round trip results in two legs.
+
+### Why it exists
+
+TripLeg preserves leg-level operational truth and allows billing logic to be based on what actually occurred rather than assumptions made later.
 
 ### Attributes
 
@@ -207,6 +216,7 @@ A round trip results in two legs.
 - leg_type (required) – enum (outbound, return)
 - leg_sequence (optional)
 - scheduled_pickup_time (optional)
+- leg_status (required) – enum (scheduled, completed, cancelled, no_show)
 - completed_flag (required, default false)
 
 ### Driver Completion Fields (conditional)
@@ -220,6 +230,11 @@ A round trip results in two legs.
 
 ### Billing Workflow
 
+- billing_candidate_flag (required, default false)
+- billing_review_status (required) – enum (not_ready, pending_review, approved, edited, exported)
+- translation_reviewed_by (optional)
+- translation_reviewed_at (optional)
+- translation_edit_reason (optional)
 - invoiced_flag (required)
 - invoiced_month (optional)
 - invoiced_date (optional)
@@ -231,6 +246,9 @@ A round trip results in two legs.
 - One-way = 1 leg.
 - Round trip = 2 legs.
 - Facility roles cannot modify completed_flag or billing flags.
+- leg_status should reflect the actual outcome of the individual leg.
+- Billing should be driven by actual recorded leg outcomes rather than a late manual reconstruction.
+- billing_review_status supports a human-in-the-loop review step before final accounting entry.
 
 ---
 
@@ -251,6 +269,52 @@ A driver who completes TripLegs.
 
 ---
 
+## Entity 7: BillingTranslation
+
+### Definition
+
+A billing-ready interpretation of completed trip data prepared by the system for human review before final accounting entry.
+
+### Why it exists
+
+This entity separates:
+
+- raw operational truth (TripRequest / TripLeg)
+- billing-ready output used for bookkeeping review and entry
+
+This reduces cognitive load during billing and preserves the ability to review, edit, and approve translated entries before they are entered into accounting software.
+
+### Attributes
+
+- billing_translation_id (PK)
+- trip_request_id (FK → TripRequest.trip_request_id, required)
+- trip_leg_id (FK → TripLeg.trip_leg_id, optional)
+- facility_id (FK → Facility.facility_id, required)
+- patient_id (FK → Patient.patient_id, required)
+- billing_period_month (required)
+- billing_period_year (required)
+- proposed_billing_type (required) – enum (single_trip, round_trip)
+- proposed_invoice_text (required)
+- destination_summary (optional)
+- translation_status (required) – enum (pending_review, approved, edited, flagged, exported)
+- approved_by_user_id (optional)
+- approved_at (optional)
+- edited_flag (required, default false)
+- edit_reason (optional)
+- exported_flag (required, default false)
+- exported_at (optional)
+- created_at (required)
+- updated_at (required)
+
+### Notes
+
+- BillingTranslation is not the source of truth for the ride itself.
+- BillingTranslation is a generated review artifact used to simplify bookkeeping.
+- A human reviewer may approve, edit, or flag the translation before it is exported or entered into accounting software.
+- This entity supports assisted billing now and future accounting integration later.
+
+---
+
 ## Relationships
 
 - Facility (1) → (0..*) TripRequest
@@ -258,6 +322,8 @@ A driver who completes TripLegs.
 - Patient (1) → (0..*) TripRequest
 - TripRequest (1) → (1..2) TripLeg
 - Driver (1) → (0..*) TripLeg
+- TripRequest (1) → (0..*) BillingTranslation
+- TripLeg (1) → (0..*) BillingTranslation
 
 ---
 
@@ -269,3 +335,16 @@ A driver who completes TripLegs.
 3. If Individual:
    - Create or reuse Facility where facility_type = individual.
 4. TripRequest.facility_id must always reference a valid Facility record.
+
+---
+
+## Billing Workflow Logic Rules
+
+1. Trip operational truth should be captured as close as possible to when the trip occurs.
+2. TripLeg.leg_status should reflect whether the leg was completed, cancelled, or no-show.
+3. Billing-ready output should be generated from structured trip data, not reconstructed manually at the end of the month.
+4. BillingTranslation exists to translate raw trip records into invoice-ready language for review.
+5. Human review remains required before final accounting entry.
+6. Approved billing entries may later be exported or entered into accounting software.
+7. Edited or flagged entries should remain visible for correction and audit clarity.
+8. Operational status and billing review status must remain distinct.
