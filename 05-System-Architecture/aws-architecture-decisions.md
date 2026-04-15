@@ -12,6 +12,8 @@ The design goal is a believable architecture that a small organization can opera
 - Support facility portal access with strict tenant scoping  
 - Support internal operational access with role-based controls  
 - Preserve data integrity for billing and disputes  
+- Enforce immutable completion records and controlled state transitions  
+- Support assisted billing workflows without requiring direct accounting integration  
 - Use a relational database foundation  
 - Keep operating overhead low  
 
@@ -31,6 +33,8 @@ The design goal is a believable architecture that a small organization can opera
 - Low maintenance  
 - Secure edge delivery  
 - Separation of UI from backend  
+
+---
 
 ### Private Service Connectivity
 
@@ -56,8 +60,8 @@ The design goal is a believable architecture that a small organization can opera
 - Throttling, request rate limits, and payload size limits  
 - Integration with AWS WAF for bot mitigation and abuse protection   
 - Clear separation of public vs authenticated routes  
+- Enforces request validation before reaching application logic  
 
----
 ---
 
 ### Edge Protection and Abuse Mitigation
@@ -78,6 +82,8 @@ Public intake endpoints represent the primary external attack surface. Layered e
 
 This reduces reputational risk, protects email deliverability, and preserves operational signal clarity.
 
+---
+
 ### Application Logic
 
 - **AWS Lambda**
@@ -86,13 +92,18 @@ This reduces reputational risk, protects email deliverability, and preserves ope
 
 - Serverless scaling  
 - Centralized enforcement of business rules  
-- Lambda enforces role-based authorization and tenant scoping using claims extracted from the validated Cognito JWT  
+- Lambda enforces:
+  - role-based authorization  
+  - tenant scoping using claims extracted from Cognito JWT  
+  - lifecycle state transitions (e.g., scheduled → completed → billed)  
+  - immutability rules (completed records cannot be modified)  
 - Facility scoping is derived from token claims and never from client-supplied request data  
 - No infrastructure management burden  
-- Cost aligned with usage patterns
+- Cost aligned with usage patterns  
 - Supports asynchronous event publishing to Amazon SQS for resilient notification processing  
-- Prevents user-facing operations from being blocked by external notification delivery failures
-  
+- Prevents user-facing operations from being blocked by external notification delivery failures  
+
+All critical business invariants are enforced at this layer, not in the frontend.
 
 ---
 
@@ -115,6 +126,8 @@ Application compute connects to the database through Amazon RDS Proxy to:
 - Manage connection pooling for Lambda concurrency
 - Protect the database from connection exhaustion
 - Centralize credential handling  
+- Enforce controlled access patterns  
+
 Direct client-to-database access is not permitted.
 
 **DynamoDB was not selected because:**
@@ -122,6 +135,7 @@ Direct client-to-database access is not permitted.
 - Data model is relational  
 - Billing workflows require grouping across entities  
 - Referential integrity is critical  
+- Lifecycle state tracking benefits from relational constraints  
 
 ---
 
@@ -132,9 +146,10 @@ Direct client-to-database access is not permitted.
 **Reasoning:**
 
 - Managed authentication  
-- Supports role groups  
+- Supports role groups (dispatcher, driver, billing, facility users)  
 - Supports custom tenant attributes  
 - Integrates with API Gateway authorizers  
+- Enables JWT-based server-side authorization enforcement  
 
 ---
 
@@ -144,9 +159,10 @@ Direct client-to-database access is not permitted.
 
 **Reasoning:**
 
-- Stores unstructured documents  
-- Separates structured relational data from exports  
+- Stores unstructured documents (exports, PDFs, audit artifacts)  
+- Separates structured relational data from generated outputs  
 - Supports lifecycle retention policies  
+- Enables archival of billing summaries and request snapshots for dispute protection  
 
 ---
 
@@ -164,12 +180,14 @@ Direct client-to-database access is not permitted.
 - Allows retry logic and independent scaling of notification processing
 - Provides controlled outbound rate management during traffic spikes
 - Prevents automated intake abuse from immediately triggering large-scale outbound messaging
-- Supports segmented notification content:
-  - Structured confirmation summaries sent to requesters
-  - Full intake snapshot copies sent only to dispatcher
-  - Canonical PDF archive stored in encrypted S3
 
-This approach balances operational redundancy, legal defensibility, and exposure minimization. 
+Supports segmented notification content:
+
+- Structured confirmation summaries sent to requesters
+- Full intake snapshot copies sent only to dispatcher
+- Canonical PDF archive stored in encrypted S3
+
+This design ensures that communication failures do not affect core operational data integrity.
 
 ---
 
@@ -182,6 +200,10 @@ This approach balances operational redundancy, legal defensibility, and exposure
 
 - Operational debugging  
 - Audit visibility  
+- Tracks:
+  - API access
+  - state transitions
+  - administrative actions  
 - Low administrative overhead  
 
 ---
@@ -200,6 +222,7 @@ The system enforces three trust zones:
 - Authenticated facility portal access is tenant-scoped using `facility_id` claims from Cognito tokens  
 - Internal users operate with broader permissions but are still enforced through server-side authorization logic  
 - All authorization checks occur inside Lambda before database queries are executed  
+- No client has direct access to the database under any circumstances  
 
 ---
 
@@ -211,9 +234,17 @@ This AWS design is intentionally minimal but realistic:
 - Serverless business logic for low operational overhead  
 - Relational database foundation for integrity and billing workflows  
 - Cognito-based identity with strict server-side authorization  
-- Clear separation between public intake, facility portal, and internal operations
+- Clear separation between public intake, facility portal, and internal operations  
 - Asynchronous notification processing for operational resilience  
 - RDS Proxy protection against connection spikes  
-- Layered edge protection (WAF, rate limiting, CAPTCHA) for abuse mitigation   
+- Layered edge protection (WAF, rate limiting, CAPTCHA) for abuse mitigation  
 - Multi-AZ database deployment for availability  
 - Private VPC endpoints for secure service communication  
+
+The system prioritizes:
+
+- Data integrity over convenience  
+- Controlled workflows over unrestricted edits  
+- Operational reliability over architectural complexity  
+
+It is designed to support real-world usage while remaining maintainable for a small organization.
