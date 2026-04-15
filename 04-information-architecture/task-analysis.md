@@ -26,6 +26,7 @@ This document breaks the user flows into practical tasks, decisions, and failure
 - Does the patient require **wheelchair** (and which size) or is the patient ambulatory?
 - Is an **escort** present?
 - Is this a **direct billing** request requiring authorized signature/date?
+- Is the requester a **Healthcare Facility** or **Individual / Private Pay**?
 
 ### Common failure points
 - Missing required times (pickup/appointment) or conflicting time info (e.g., will call + fixed back time both selected)
@@ -34,12 +35,14 @@ This document breaks the user flows into practical tasks, decisions, and failure
 - Escort selected “Yes” but name missing
 - Payment method unclear or multiple selected incorrectly
 - Direct billing selected but signature/date missing
+- Incorrect requester type leading to misclassification of tenant
 
 ### What the system must support
 - Required field prompts and clear validation messages
 - Optional fields clearly marked (e.g., ext)
 - Conditional fields (escort name only required if escort = yes)
 - Clear handling of “will call” vs scheduled times
+- Enforced tenant assignment (facility or individual; no NULL state)
 
 ---
 
@@ -53,7 +56,7 @@ This document breaks the user flows into practical tasks, decisions, and failure
 - Trip type (one-way vs round trip)
 - Mobility requirements (affects vehicle/driver planning)
 - Pickup/drop-off locations (for routing)
--Escort present (affects number of seats/spaces needed in vehicle)
+- Escort present (affects number of seats/spaces needed in vehicle)
 
 ### Decisions
 - Can the business accept this ride given current capacity?
@@ -73,6 +76,7 @@ This document breaks the user flows into practical tasks, decisions, and failure
 - Calendar/day view that shows all legs by time
 - Driver availability and assignment tracking
 - Two-leg representation for round trips (separate outbound and return legs)
+- Explicit status visibility (scheduled, assigned, in-progress, completed, cancelled, no-show)
 - Quick edit/update when times shift
 
 ---
@@ -110,6 +114,7 @@ This document breaks the user flows into practical tasks, decisions, and failure
 - Fast “driver view” that is optimized for completion logging
 - Clear separation of outbound vs return leg
 - Ability to mark status: completed / cancelled / no-show
+- Immutable completion record once submitted (no silent edits)
 - Simple validation (e.g., odometer end should be ≥ start)
 
 ---
@@ -129,7 +134,11 @@ This document breaks the user flows into practical tasks, decisions, and failure
 ### What the system must support
 - Updating a trip leg without losing original context
 - Recording cancellation reason and timestamp (lightweight, not bureaucratic)
-- Keeping a traceable history for billing disputes (at minimum, status + notes)
+- Maintaining audit visibility of changes (status + notes at minimum)
+- Distinguishing between:
+  - scheduled but not executed
+  - cancelled before service
+  - no-show after dispatch
 
 ---
 
@@ -148,26 +157,40 @@ This document breaks the user flows into practical tasks, decisions, and failure
 ### Actions
 - Filter for completed legs in a date range (billing period)
 - Group by facility → then by patient
-- Confirm each leg has required completion data
-- Mark billing workflow status (ready to bill → billed)
+- Review completion status and data accuracy
+- Mark billing workflow status (ready to bill → billed → paid)
 
 ### Common failure points
 - Legs missing completion data but still counted
 - Duplicate trips or missing trips when sorting manually
 - Losing place during billing and rechecking work repeatedly
+- Mental fatigue from translating ride data into invoice format
 
 ### What the system must support
 - “Billing view” that groups automatically
 - Status checkboxes or workflow states
 - Exportable summaries (PDF/CSV) suitable for QuickBooks entry
 
+### Assisted Billing Enhancement (Critical Design Addition)
+
+- The system should generate **billing-ready structured outputs** for each trip or grouped invoice
+- Billing workflow should be divided into:
+  - **Validation step:** confirm trips are accurate and complete
+  - **Translation step:** system prepares invoice-friendly output
+  - **Entry step:** user copies/exports into accounting system
+
+This removes the need for manual reconstruction and reduces cognitive load and billing errors.
+
 ---
 
 ## Output: Design Implications
 
 This task analysis implies that the system must support:
+
 - Incremental data capture across roles over time
 - Separate trip legs for round trips
 - Strong validation for required/conditional fields
 - Role-based views (dispatcher vs driver vs billing)
-- Workflow statuses that support interruptions and resumption
+- Explicit workflow states across the trip lifecycle
+- Immutable completion records for defensibility
+- Assisted billing workflows instead of manual reconstruction
