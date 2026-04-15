@@ -23,27 +23,31 @@ Each role interacts with the same trip record but contributes different informat
 **Purpose:** Request transportation for a patient
 
 Steps:
-1. Facility staff completes the top portion of the form:
-   - Facility name
+1. Requester selects requester type:
+   - Healthcare Facility
+   - Individual / Private Pay
+2. Requester completes intake:
+   - Facility name (if applicable)
    - Contact name
    - Phone, extension (if applicable), fax
-2. Trip information is provided:
+3. Trip information is provided:
    - Order date
    - Service date
    - Pickup time, appointment time
    - One-way or round-trip selection
    - Wheelchair and mobility needs
-3. Pickup and drop-off addresses are recorded.
-4. Attendant or escort information is included if applicable.
-5. Patient information is entered:
+4. Pickup and drop-off addresses are recorded.
+5. Attendant or escort information is included if applicable.
+6. Patient information is entered:
    - Name
    - Gender
    - Payment method
-6. Authorization signature is provided when required.
+7. Authorization signature is provided when required.
 
 Output:
-- A new trip request exists in the system.
-- The request is pending scheduling and assignment.
+- A new **TripRequest** is created.
+- TripRequest is assigned to a **tenant** (facility or individual).
+- Initial status: **Scheduled (unassigned)**.
 
 ---
 
@@ -54,17 +58,19 @@ Output:
 
 Steps:
 1. Dispatcher reviews incoming trip requests.
-2. Confirms trip type:
+2. Confirms trip structure:
    - One-way (single leg)
    - Round-trip (two separate legs)
-3. Assigns service dates and expected times.
-4. Assigns a driver to each trip leg.
-5. Prepares the trip for execution.
+3. System generates one or two **TripLeg** records.
+4. Dispatcher assigns:
+   - Service times
+   - Driver for each leg
+5. Dispatcher resolves conflicts (timing, routing, capacity).
 
 Output:
-- Trip legs are scheduled.
-- Driver assignments are visible.
-- Trip is ready for execution.
+- Trip legs are scheduled and assigned.
+- Status transitions:
+  - **Scheduled → Assigned**
 
 ---
 
@@ -74,20 +80,22 @@ Output:
 **Purpose:** Document completion of the trip leg
 
 Steps:
-1. Driver receives assigned trip details.
-2. Driver records:
-   - Odometer start
-   - Start time
-3. Driver completes the trip leg.
-4. Driver records:
-   - Odometer end
-   - End time
-   - Total mileage
-5. Driver signs to confirm accuracy.
+1. Driver views assigned trips for the day.
+2. Driver begins trip:
+   - Records odometer start
+   - Records start time
+   - Status transitions to **In Progress**
+3. Driver completes the trip:
+   - Records odometer end
+   - Records end time
+   - Confirms total mileage
+4. Driver signs to confirm accuracy.
 
 Output:
-- Outbound trip leg is documented.
-- Mileage and timing are recorded for accountability.
+- Trip leg marked **Completed** OR:
+  - **Cancelled**
+  - **No-show**
+- Completion record becomes **immutable** after submission.
 
 ---
 
@@ -97,32 +105,61 @@ Output:
 **Purpose:** Document return trip when round-trip applies
 
 Steps:
-1. Driver completes a separate trip leg later in the day.
-2. Odometer start/end and times are recorded independently.
-3. Driver signs for the return leg.
+1. Return leg is triggered:
+   - At scheduled time OR
+   - Via will-call notification
+2. Driver completes a separate trip leg.
+3. Completion is recorded independently.
 
 Notes:
 - The return leg may occur hours later.
-- The return leg may be canceled if the patient is admitted.
+- The return leg may be canceled (e.g., patient admitted).
 - Each leg is treated as its own record for accuracy and dispute protection.
 
 Output:
-- Return trip leg is documented or marked canceled.
+- Return trip leg is:
+  - **Completed**
+  - **Cancelled**
+  - **No-show**
 
 ---
 
-## Flow 5: Billing Preparation (Billing Function)
+## Flow 5: Exceptions and Changes (Dispatcher + Driver)
+
+**Actors:** Dispatcher and driver  
+**Purpose:** Maintain accurate records during real-world changes
+
+Common events:
+- Patient cancels before pickup
+- No-show at pickup
+- Return leg cancelled due to admission
+- Driver reassigned
+- Time or address changes
+
+System behavior:
+- Status is updated rather than deleting records
+- Cancellation reason may be recorded
+- Timeline of events remains visible (audit-friendly)
+
+Output:
+- Trip record reflects real-world outcome with traceable status changes.
+
+---
+
+## Flow 6: Billing Preparation (Billing Function)
 
 **Actor:** Billing staff  
-**Purpose:** Prepare accurate invoices
+**Purpose:** Prepare accurate invoices efficiently
 
 Steps:
-1. Billing reviews completed trip legs.
-2. Trips are grouped by:
-   - Facility
-   - Patient
-3. Completion status is verified.
-4. Billing status is tracked (ready, submitted, paid).
+1. Billing filters **completed trip legs** within billing period.
+2. System groups data:
+   - By tenant (facility or individual)
+   - By patient
+3. Billing reviews completion data for accuracy.
+4. System generates **billing-ready output** (structured summary).
+5. Billing marks workflow status:
+   - **Ready → Billed → Paid**
 
 Output:
 - Billing packets are prepared.
@@ -130,15 +167,43 @@ Output:
 
 ---
 
+## Assisted Billing Workflow (Key Enhancement)
+
+Instead of manual reconstruction:
+
+1. **Validation Phase**
+   - Confirm trip accuracy (completed, mileage correct, no duplicates)
+
+2. **System Translation Phase**
+   - System generates invoice-ready data (human-readable format)
+
+3. **Entry Phase**
+   - User copies or exports data into QuickBooks
+
+This reduces:
+- Cognitive load
+- Manual sorting
+- Billing errors
+- Time spent reconstructing trip history
+
+---
+
 ## Key Design Principles Reflected in the Flow
 
 - Familiar paper workflow is preserved.
-- Information is added incrementally.
+- Information is added incrementally across roles.
 - Accountability is role-specific.
 - Round trips are modeled as separate legs.
+- Explicit **status transitions** replace implicit assumptions.
+- Completion records are **immutable** for dispute protection.
+- Billing is **system-assisted**, not manually reconstructed.
 - The system supports real-world exceptions (cancellations, delays).
 
-##Design decisions deferred
+---
+
+## Design Decisions Deferred
+
 - Final database schema
-- Billing workflow depth
+- QuickBooks integration method (manual vs API)
+- Advanced billing automation
 - Contact lifecycle edge cases
