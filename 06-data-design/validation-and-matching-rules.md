@@ -7,6 +7,11 @@ and secure multi-tenant operation.
 The system handles transportation requests that may include PII and healthcare-adjacent data.
 Validation rules must preserve billing defensibility and prevent cross-tenant exposure.
 
+Additionally, this system supports a **human-in-the-loop billing workflow** where
+structured trip data is translated into billing-ready output and reviewed prior to
+final accounting entry. Validation rules must support both operational accuracy
+and billing accuracy.
+
 ---
 
 ## 1. Tenant Isolation Rules (Critical)
@@ -76,6 +81,7 @@ Authenticated Facility users are scoped by:
 All facility portal queries must enforce tenant isolation first:
 
 TripRequest.facility_id = current_user.facility_id
+
 ---
 
 ### FacilityAdmin Visibility Rule
@@ -83,7 +89,6 @@ TripRequest.facility_id = current_user.facility_id
 FacilityAdmin may view all TripRequests where:
 
 TripRequest.facility_id = current_user.facility_id
----
 
 ---
 
@@ -91,12 +96,12 @@ TripRequest.facility_id = current_user.facility_id
 
 FacilityUser may view TripRequests where:
 
-TripRequest.facility_id = current_user.facility_id
-AND
+TripRequest.facility_id = current_user.facility_id  
+AND  
 (
-    TripRequest.submitted_by_user_id = current_user.user_id
-    OR
-    TripRequest.contact_id = current_user.contact_id
+    TripRequest.submitted_by_user_id = current_user.user_id  
+    OR  
+    TripRequest.contact_id = current_user.contact_id  
 )
 
 Facility users must never see requests from other facilities,
@@ -207,19 +212,42 @@ Historical truth always lives on TripRequest snapshot fields.
 
 ---
 
-## 8. Trip Status Transition Rules
+## 8. Trip and Billing State Validation Rules
 
 ### TripRequest.status Allowed Transitions
 
 - `draft → scheduled`
 - `scheduled → completed`
 - `scheduled → cancelled`
+- `scheduled → no_show`
 
-### TripLeg.completed_flag
+### TripLeg Status Rules
 
-- False by default
-- Can only be set True by assigned Driver
-- Cannot be unset by Facility roles
+- `leg_status` must reflect actual outcome:
+  - scheduled
+  - completed
+  - cancelled
+  - no_show
+
+- `completed_flag`:
+  - False by default
+  - Can only be set True by assigned Driver
+  - Cannot be unset by Facility roles
+
+### Billing Review State Rules
+
+Billing must be derived from recorded trip outcomes, not manual reconstruction.
+
+- A TripRequest or TripLeg is eligible for billing only when:
+  - status or leg_status is `completed` or valid billable outcome
+
+- Billing review flow:
+  - `not_ready → pending_review → approved`
+  - Optional:
+    - `approved → edited`
+    - `edited → approved`
+  - Final:
+    - `approved → exported`
 
 ### Billing Flags
 
@@ -227,9 +255,37 @@ Historical truth always lives on TripRequest snapshot fields.
 - `paid_flag` can be set only by Billing role
 - Facility roles cannot modify billing flags
 
+### Validation Requirements
+
+- A record must not be marked `approved` unless required operational data is complete.
+- Edited records should include an optional edit reason.
+- Exported records must not be modified without audit logging.
+
 ---
 
-## 9. Cancellation and Dispute Handling
+## 9. Billing Translation Validation Rules
+
+BillingTranslation (if implemented) must:
+
+- Be generated from valid TripRequest / TripLeg data
+- Reflect actual trip outcomes
+- Not overwrite source data
+- Remain editable prior to export
+
+### Review Rules
+
+- A human reviewer must approve or edit before export
+- System-generated values must remain visible for comparison
+- Edits must not destroy original computed values (audit integrity)
+
+### Safety Rule
+
+No billing output should be exported or entered into accounting systems
+without human review.
+
+---
+
+## 10. Cancellation and Dispute Handling
 
 Facility roles cannot delete or modify TripRequests.
 
@@ -238,6 +294,7 @@ Instead:
 - Cancellation requests must:
   - Change TripRequest.status to `cancelled` (if before execution)
   - Preserve original data
+
 - Disputes must:
   - Be recorded as notes or separate DisputeRequest entity
   - Never overwrite driver completion data
@@ -251,7 +308,7 @@ All cancellation and dispute events must log:
 
 ---
 
-## 10. Individual / Private-Pay Rules
+## 11. Individual / Private-Pay Rules
 
 If `facility_type = individual`:
 
@@ -265,7 +322,7 @@ Each private-pay rider is isolated in their own Facility record.
 
 ---
 
-## 11. Logging Constraints
+## 12. Logging Constraints
 
 System logs must:
 
@@ -282,6 +339,7 @@ Audit-sensitive events include:
 - Patient merges
 - Trip completion
 - Billing status changes
+- Billing approval and edits
 - Cancellation requests
 
 ---
@@ -296,7 +354,6 @@ These validation and matching rules enforce:
 - Public intake safety
 - Billing defensibility
 - Secure facility portal visibility
+- Human-in-the-loop billing accuracy
 
 All authorization and validation rules must be enforced server-side in Lambda.
-
-
