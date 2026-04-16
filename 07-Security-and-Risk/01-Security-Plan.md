@@ -11,6 +11,8 @@ This document defines the security controls implemented in the system architectu
 - Audit logging
 - Data retention posture
 - Notification privacy controls
+- Controlled lifecycle state transitions
+- Immutable completion records
 
 The goal is to protect operational integrity, billing accuracy, and sensitive scheduling information while maintaining usability for a small healthcare-adjacent organization.
 
@@ -40,8 +42,7 @@ Security principles enforced:
 
 Facility users are always scoped by:
 
-TripRequest.facility_id = token.custom:facility_id
-
+`TripRequest.facility_id = token.custom:facility_id`
 
 FacilityUsers have additional visibility restrictions based on:
 - `submitted_by_user_id`
@@ -52,6 +53,8 @@ Drivers only see assigned trip legs.
 Billing roles cannot modify completion data.
 
 Completed records cannot be modified by facility roles.
+
+Completed records cannot be modified by drivers after submission.
 
 ## What This Means for the Business
 
@@ -199,6 +202,9 @@ Key audit-relevant events include:
 - Cancellation approval/denial
 - Completion submission
 - Billing state transition
+- Billing approval
+- Billing edit / correction
+- Export / invoicing state change
 
 Logs avoid storing unnecessary PHI in log payloads.
 
@@ -220,6 +226,8 @@ It also supports long-term documentation integrity and dispute resolution.
 
 Audit clarity increases operational confidence and reduces reputational risk.
 
+Because billing output is reviewed and potentially edited before final entry, audit logs also protect against silent financial changes and support accountability in the billing workflow.
+
 ---
 
 # 7. Notification Privacy Controls
@@ -228,8 +236,7 @@ Audit clarity increases operational confidence and reduces reputational risk.
 
 Notification workflow:
 
-Main Lambda → SQS → Notification Lambda → SNS / SES
-
+`Main Lambda → SQS → Notification Lambda → SNS / SES`
 
 Controls include:
 
@@ -262,6 +269,7 @@ It also demonstrates thoughtful separation between operational workflow and comm
 - Relational records are preserved long-term.
 - Completed trip data is immutable.
 - Cancellations are recorded as workflow events.
+- Billing review and export states are recorded.
 - S3 lifecycle policies support retention management.
 - No destructive deletion by facility roles.
 
@@ -284,7 +292,35 @@ Over time, structured retention becomes a business asset rather than a liability
 
 ---
 
-# 9. Regulatory Context
+# 9. Billing Workflow Integrity
+
+## Technical Design
+
+Billing is treated as a controlled workflow rather than an unrestricted clerical task.
+
+Security-sensitive controls include:
+
+- Billing outputs are derived from structured trip and trip leg data
+- Human review is required before final export or accounting entry
+- Edited billing outputs may not overwrite original operational records
+- Billing states are role-restricted and auditable
+- Exported / billed records cannot be changed silently
+
+This design supports assisted billing rather than unattended automation.
+
+## What This Means for the Business
+
+This protects one of the business’s most sensitive areas: money.
+
+By separating raw trip data from billing-ready output, the system reduces the risk of accidental manipulation or incorrect invoice generation.
+
+By requiring human review, the system preserves control while still reducing manual effort.
+
+This means the business gets efficiency without sacrificing accuracy or defensibility.
+
+---
+
+# 10. Regulatory Context
 
 This system implements architectural controls consistent with modern security best practices:
 
@@ -294,6 +330,7 @@ This system implements architectural controls consistent with modern security be
 - Network segmentation
 - Immutable operational records
 - Audit logging
+- Controlled billing workflows
 
 Formal regulatory compliance programs (e.g., workforce training, device policy enforcement, documentation policies, and business associate agreements) operate outside the scope of system architecture and remain part of organizational governance.
 
@@ -307,10 +344,12 @@ The security posture of this system is structured around:
 
 - Enforced tenant isolation  
 - Immutable operational records  
+- Controlled lifecycle state transitions  
 - Role-based segmentation  
 - Private network boundaries  
 - Encrypted storage and transport  
 - Audit-friendly workflows  
+- Controlled billing review and export  
 - Decoupled notification reliability  
 
 Security is not implemented as a surface feature.
@@ -318,4 +357,3 @@ Security is not implemented as a surface feature.
 It is embedded into data structure, workflow design, and infrastructure boundaries.
 
 This approach reduces operational risk, protects revenue integrity, and supports long-term business durability while remaining manageable for a small organization.
-
