@@ -7,19 +7,20 @@ This system handles transportation requests that may include personally identifi
 - Prevent unauthorized access to trip and patient-related data  
 - Enforce strict role-based access control (internal and facility-facing roles)  
 - Protect operational and billing integrity  
+- Enforce immutability of completed trip records  
+- Enforce controlled lifecycle state transitions for all trip and billing data  
 - Minimize PHI/PII exposure through public intake  
-- Preserve auditability for dispute-sensitive and billing-sensitive actions
-- Prevent automated abuse from degrading operational reliability or notification reputation    
-- Protect data in transit and at rest
+- Preserve auditability for dispute-sensitive and billing-sensitive actions  
+- Prevent automated abuse from degrading operational reliability or notification reputation  
+- Protect data in transit and at rest  
 - Enforce encryption using TLS for all external and internal service communication  
-- Ensure database and object storage encryption at rest using managed encryption keys
+- Ensure database and object storage encryption at rest using managed encryption keys  
 
 The application connects to the database exclusively through Amazon RDS Proxy to:
 
-- Prevent connection exhaustion during Lambda concurrency spikes
-- Centralize credential management
-- Reduce database exposure risk
-    
+- Prevent connection exhaustion during Lambda concurrency spikes  
+- Centralize credential management  
+- Reduce database exposure risk  
 
 This is a layered security model designed for a small healthcare-adjacent organization.
 
@@ -61,18 +62,17 @@ Public intake is strictly write-only.
 
 Public endpoints are protected by layered edge defenses:
 
-- AWS WAF with rate-based rules and IP reputation filtering
-- API Gateway throttling and burst limits
-- CAPTCHA enforcement for unauthenticated intake submissions
+- AWS WAF with rate-based rules and IP reputation filtering  
+- API Gateway throttling and burst limits  
+- CAPTCHA enforcement for unauthenticated intake submissions  
 
 These controls mitigate automated abuse, bot-driven form flooding, and denial-of-service attempts before application logic is invoked.
 
 API Gateway enforces:
-- JWT validation for authenticated routes
-- Payload size limits
-- Rate limiting
-- Schema-level input validation before Lambda execution
-  
+- JWT validation for authenticated routes  
+- Payload size limits  
+- Rate limiting  
+- Schema-level input validation before Lambda execution  
 
 ---
 
@@ -91,6 +91,38 @@ Authorization decisions are derived exclusively from validated Cognito token cla
 
 Tenant scoping (`facility_id`) is enforced server-side before any database query is executed.
 
+All sensitive operations (state transitions, billing updates, completion confirmation) are validated at the application layer before persistence.
+
+---
+
+## Data Integrity and Immutability Controls
+
+To protect billing integrity and dispute defensibility:
+
+- Trip completion records become **immutable once submitted**
+- Drivers cannot modify records after submission
+- Facility users cannot modify completion or billing data
+- Billing users cannot modify operational or completion data
+- All updates follow controlled lifecycle transitions
+
+Lifecycle states include (non-exhaustive):
+
+- scheduled  
+- completed  
+- cancelled  
+- no-show  
+- ready_to_bill  
+- billed  
+- paid  
+
+State transitions are:
+
+- Explicitly validated  
+- Role-restricted  
+- Logged for audit purposes  
+
+This prevents silent data manipulation and ensures that all operational changes are traceable.
+
 ---
 
 ## Notification Security Model
@@ -99,10 +131,10 @@ Notifications are dispatched asynchronously through Amazon SQS and a dedicated N
 
 Security controls include:
 
-- No direct client access to SNS or SES
-- All outbound notifications originate from controlled Lambda execution
-- SQS access restricted via IAM roles
-- SNS and SES accessed through VPC Interface Endpoints (no public internet path)
+- No direct client access to SNS or SES  
+- All outbound notifications originate from controlled Lambda execution  
+- SQS access restricted via IAM roles  
+- SNS and SES accessed through VPC Interface Endpoints (no public internet path)  
 
 This prevents notification systems from exposing sensitive operational data or becoming an attack surface.
 
@@ -110,15 +142,16 @@ This prevents notification systems from exposing sensitive operational data or b
 
 Outbound notifications follow a dual-layer strategy:
 
-- Requesters receive structured confirmation summaries with limited operational details.
-- Dispatcher receives full intake copy for operational redundancy.
-- Canonical intake snapshots are stored in encrypted S3 for archival integrity.
+- Requesters receive structured confirmation summaries with limited operational details  
+- Dispatcher receives full intake copy for operational redundancy  
+- Canonical intake snapshots are stored in encrypted S3 for archival integrity  
 
 This approach:
 
-- Preserves legal defensibility
-- Reduces external PII/PHI exposure
-- Maintains operational continuity if application access is temporarily unavailable
+- Preserves legal defensibility  
+- Reduces external PII/PHI exposure  
+- Maintains operational continuity if application access is temporarily unavailable  
+
 ---
 
 ## Abuse Containment and Deliverability Protection
@@ -127,12 +160,12 @@ The system is designed to prevent automated intake abuse from escalating into ou
 
 Controls include:
 
-- API Gateway rate limits per IP
-- AWS WAF rate-based blocking
-- CAPTCHA validation for public intake
-- SQS decoupling to buffer outbound notifications
-- Notification Lambda concurrency controls
-- SES sending quotas and bounce/complaint monitoring
+- API Gateway rate limits per IP  
+- AWS WAF rate-based blocking  
+- CAPTCHA validation for public intake  
+- SQS decoupling to buffer outbound notifications  
+- Notification Lambda concurrency controls  
+- SES sending quotas and bounce/complaint monitoring  
 
 These layered controls ensure that malicious or automated submissions cannot generate uncontrolled email or SMS volume.
 
@@ -148,45 +181,46 @@ The architecture prioritizes preserving notification reputation and operational 
 ### Dispatcher
 
 **Can:**
-- Create and edit TripRequests
-- Assign drivers
-- Modify scheduling details
-- Merge patients
-- Approve or reject cancellation requests
-- Resolve disputes
-- Modify billing workflow flags
+- Create and edit TripRequests (prior to completion)  
+- Assign drivers  
+- Modify scheduling details  
+- Merge patients  
+- Approve or reject cancellation requests  
+- Resolve disputes  
+- Modify billing workflow flags  
 
 **Cannot:**
-- Bypass audit logging
+- Modify completed trip records  
+- Bypass audit logging  
 
 ---
 
 ### Driver
 
 **Can:**
-- View assigned TripLegs only
-- Record completion data
-- Mark completed or no-show
+- View assigned TripLegs only  
+- Record completion data  
+- Mark completed or no-show  
 
 **Cannot:**
-- View unassigned trips
-- Modify scheduling
-- Modify billing
-- Edit data after completion is finalized
+- View unassigned trips  
+- Modify scheduling  
+- Modify billing  
+- Edit data after completion is finalized  
 
 ---
 
 ### Billing
 
 **Can:**
-- View completed TripLegs
-- Group by facility/patient
-- Manage billing flags (`ready → billed → paid`)
+- View completed TripLegs  
+- Group by facility/patient  
+- Manage billing flags (`ready → billed → paid`)  
 
 **Cannot:**
-- Modify intake data
-- Modify completion data
-- Modify scheduling
+- Modify intake data  
+- Modify completion data  
+- Modify scheduling  
 
 ---
 
@@ -197,7 +231,7 @@ Facility roles are intentionally restricted to prevent unauthorized data modific
 ## FacilityUser
 
 **Can:**
-- Submit new TripRequests
+- Submit new TripRequests  
 - View:
   - TripRequests they submitted  
   - TripRequests where they are the listed contact  
@@ -231,12 +265,14 @@ Facility roles are intentionally restricted to prevent unauthorized data modific
 
 FacilityAdmin is an oversight role, not an operational role.
 
+---
+
 ### Cancellation Enforcement Rules
 
-- Cancellation requests initiated by facility users are treated as state-transition requests and require dispatcher approval.
-- Same-day cancellation attempts are automatically denied and instruct the facility to contact dispatch by phone.
-- Approved cancellations generate notification events to both the dispatcher and the listed facility contact.
-  
+- Cancellation requests initiated by facility users are treated as state-transition requests and require dispatcher approval  
+- Same-day cancellation attempts are automatically denied and instruct the facility to contact dispatch by phone  
+- Approved cancellations generate notification events to both the dispatcher and the listed facility contact  
+
 ---
 
 # Facility Portal Visibility Rules
@@ -249,6 +285,7 @@ May view all TripRequests where:
 
 ```sql
 TripRequest.facility_id = current_user.facility_id
+```
 
 ---
 
@@ -256,18 +293,24 @@ TripRequest.facility_id = current_user.facility_id
 
 Logging is enabled at:
 
-- API Gateway
-- Lambda execution
-- Database audit layer
+- API Gateway  
+- Lambda execution  
+- Database audit layer  
 
 Logs capture:
 
-- User ID
-- Role
-- Timestamp
-- Entity reference
-- Action performed
+- User ID  
+- Role  
+- Timestamp  
+- Entity reference  
+- Action performed  
+- State transition (when applicable)  
 
 Logs intentionally exclude PHI and sensitive payload content.
 
-Audit logs are immutable and support dispute resolution, billing defensibility, and forensic review.
+Audit logs are immutable and support:
+
+- Dispute resolution  
+- Billing defensibility  
+- Forensic review  
+- Operational accountability  
